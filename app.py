@@ -20,25 +20,60 @@ try:
     df = load_data()
     df_2025 = df[df['year'] == 2025].copy()
     
-    # 2. サイドバーでの入力
+    # 💡 新機能：2026年の最新データを自動取得して、入力欄の「初期値」にする
+    df_2026 = df[df['year'] == 2026]
+    if not df_2026.empty:
+        # 2026年のデータの中で一番週番号が大きい（最新の）行を取得
+        latest_data = df_2026.sort_values('week_num', ascending=False).iloc[0]
+        
+        # データが空欄(NaN)だった場合に備えて、安全に値を取り出す関数
+        def get_val(col_name, default_val):
+            if col_name in latest_data and pd.notnull(latest_data[col_name]):
+                return float(latest_data[col_name])
+            return default_val
+        
+        def_week = int(get_val('week_num', 30))
+        def_temp_0m = get_val('temp_0m', 28.0)
+        def_temp_5m = get_val('temp_5m', 27.0)
+        def_sal_0m = get_val('sal_0m', 30.0)
+        def_sal_5m = get_val('sal_5m', 31.0)
+        def_do_0m = get_val('do_0m', 6.0)
+        def_do_5m = get_val('do_5m', 5.0)
+        def_chl_0m = get_val('chl_0m', 1.5)
+        def_chl_5m = get_val('chl_5m', 1.5)
+        def_precip_day = get_val('precip_mm_day', 0.0)
+        def_precip = get_val('precip_sum_july', 150.0)
+        def_air_avg = get_val('air_temp_avg', 28.0)
+        def_air_month = get_val('air_temp_month', 26.0)
+    else:
+        # 万が一、2026年のデータがまだCSVに1行も無い場合の仮の初期値
+        def_week = 30
+        def_temp_0m, def_temp_5m = 28.0, 27.0
+        def_sal_0m, def_sal_5m = 30.0, 31.0
+        def_do_0m, def_do_5m = 6.0, 5.0
+        def_chl_0m, def_chl_5m = 1.5, 1.5
+        def_precip_day, def_precip = 0.0, 150.0
+        def_air_avg, def_air_month = 28.0, 26.0
+
+    # 2. サイドバーでの入力（初期値に上記の最新データをセット）
     st.sidebar.header("📡 最新の観測値を入力")
-    input_week = st.sidebar.slider("現在の週番号 (week_num)", 1, 52, 30)
+    input_week = st.sidebar.slider("現在の週番号 (week_num)", 1, 52, def_week)
     
     st.sidebar.subheader("水温・塩分・DO・クロロフィル")
-    input_temp_0m = st.sidebar.number_input("現在の0m水温 (temp_0m) ℃", value=28.0, step=0.1)
-    input_temp = st.sidebar.number_input("現在の5m水温 (temp_5m) ℃", value=27.0, step=0.1)
-    input_sal_0m = st.sidebar.number_input("現在の0m塩分 (sal_0m)", value=30.0, step=0.1)
-    input_sal_5m = st.sidebar.number_input("現在の5m塩分 (sal_5m)", value=31.0, step=0.1)
-    input_do_0m = st.sidebar.number_input("現在の0mDO (do_0m) mg/L", value=6.0, step=0.1)
-    input_do_5m = st.sidebar.number_input("現在の5mDO (do_5m) mg/L", value=5.0, step=0.1)
-    input_chl_0m = st.sidebar.number_input("現在の0mクロロフィル (chl_0m)", value=1.5, step=0.1)
-    input_chl = st.sidebar.number_input("現在の5mクロロフィル (chl_5m)", value=1.5, step=0.1)
+    input_temp_0m = st.sidebar.number_input("現在の0m水温 (temp_0m) ℃", value=def_temp_0m, step=0.1)
+    input_temp = st.sidebar.number_input("現在の5m水温 (temp_5m) ℃", value=def_temp_5m, step=0.1)
+    input_sal_0m = st.sidebar.number_input("現在の0m塩分 (sal_0m)", value=def_sal_0m, step=0.1)
+    input_sal_5m = st.sidebar.number_input("現在の5m塩分 (sal_5m)", value=def_sal_5m, step=0.1)
+    input_do_0m = st.sidebar.number_input("現在の0mDO (do_0m) mg/L", value=def_do_0m, step=0.1)
+    input_do_5m = st.sidebar.number_input("現在の5mDO (do_5m) mg/L", value=def_do_5m, step=0.1)
+    input_chl_0m = st.sidebar.number_input("現在の0mクロロフィル (chl_0m)", value=def_chl_0m, step=0.1)
+    input_chl = st.sidebar.number_input("現在の5mクロロフィル (chl_5m)", value=def_chl_5m, step=0.1)
     
     st.sidebar.subheader("気象データ")
-    input_precip_day = st.sidebar.number_input("直近1週間の降水量 (mm)", value=0.0, step=1.0)
-    input_precip = st.sidebar.number_input("7月の累計降水量 (mm)", value=150.0, step=1.0)
-    input_air_avg = st.sidebar.number_input("調査日の日平均気温 (℃)", value=28.0, step=0.1)
-    input_air_month = st.sidebar.number_input("月平均気温 (℃)", value=26.0, step=0.1)
+    input_precip_day = st.sidebar.number_input("直近1週間の降水量 (mm)", value=def_precip_day, step=1.0)
+    input_precip = st.sidebar.number_input("7月の累計降水量 (mm)", value=def_precip, step=1.0)
+    input_air_avg = st.sidebar.number_input("調査日の日平均気温 (℃)", value=def_air_avg, step=0.1)
+    input_air_month = st.sidebar.number_input("月平均気温 (℃)", value=def_air_month, step=0.1)
 
     # 3. リスク判定ロジック
     st.subheader("⚠️ リスク判定結果")
