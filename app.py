@@ -19,46 +19,57 @@ def load_data():
 try:
     df = load_data()
     df_2025 = df[df['year'] == 2025].copy()
+    df_2024 = df[df['year'] == 2024].copy()
     
-    # 💡 新機能：2026年の最新データを自動取得して、入力欄の「初期値」にする
-    df_2026 = df[df['year'] == 2026]
-    if not df_2026.empty:
-        # 2026年のデータの中で一番週番号が大きい（最新の）行を取得
-        latest_data = df_2026.sort_values('week_num', ascending=False).iloc[0]
-        
-        # データが空欄(NaN)だった場合に備えて、安全に値を取り出す関数
-        def get_val(col_name, default_val):
-            if col_name in latest_data and pd.notnull(latest_data[col_name]):
-                return float(latest_data[col_name])
-            return default_val
-        
-        def_week = int(get_val('week_num', 30))
-        def_temp_0m = get_val('temp_0m', 28.0)
-        def_temp_5m = get_val('temp_5m', 27.0)
-        def_sal_0m = get_val('sal_0m', 30.0)
-        def_sal_5m = get_val('sal_5m', 31.0)
-        def_do_0m = get_val('do_0m', 6.0)
-        def_do_5m = get_val('do_5m', 5.0)
-        def_chl_0m = get_val('chl_0m', 1.5)
-        def_chl_5m = get_val('chl_5m', 1.5)
-        def_precip_day = get_val('precip_mm_day', 0.0)
-        def_precip = get_val('precip_sum_july', 150.0)
-        def_air_avg = get_val('air_temp_avg', 28.0)
-        def_air_month = get_val('air_temp_month', 26.0)
-    else:
-        # 万が一、2026年のデータがまだCSVに1行も無い場合の仮の初期値
-        def_week = 30
-        def_temp_0m, def_temp_5m = 28.0, 27.0
-        def_sal_0m, def_sal_5m = 30.0, 31.0
-        def_do_0m, def_do_5m = 6.0, 5.0
-        def_chl_0m, def_chl_5m = 1.5, 1.5
-        def_precip_day, def_precip = 0.0, 150.0
-        def_air_avg, def_air_month = 28.0, 26.0
-
-    # 2. サイドバーでの入力（初期値に上記の最新データをセット）
+    # 2. サイドバーでの入力
     st.sidebar.header("📡 最新の観測値を入力")
-    input_week = st.sidebar.slider("現在の週番号 (week_num)", 1, 52, def_week)
     
+    df_2026 = df[df['year'] == 2026]
+    
+    if not df_2026.empty:
+        valid_dates = df_2026['date'].dropna()
+        if not valid_dates.empty:
+            latest_date = valid_dates.max().date()
+        else:
+            latest_date = pd.to_datetime("2026-07-01").date()
+    else:
+        latest_date = pd.to_datetime("2026-07-01").date()
+
+    input_date = st.sidebar.date_input("現在の観測日", value=latest_date)
+    
+    exact_match = df_2026[df_2026['date'].dt.date == input_date]
+    if not exact_match.empty:
+        input_week = int(exact_match['week_num'].values[0])
+    else:
+        input_week = input_date.isocalendar()[1]
+        
+    st.sidebar.caption(f"※ 裏側のシステム判定用: 第 {input_week} 週")
+
+    if not exact_match.empty:
+        target_data = exact_match.iloc[0]
+    elif not df_2026.empty:
+        target_data = df_2026.sort_values('week_num', ascending=False).iloc[0]
+    else:
+        target_data = pd.Series(dtype=float)
+
+    def get_val(data_row, col_name, default_val):
+        if col_name in data_row and pd.notnull(data_row[col_name]):
+            return float(data_row[col_name])
+        return default_val
+
+    def_temp_0m = get_val(target_data, 'temp_0m', 28.0)
+    def_temp_5m = get_val(target_data, 'temp_5m', 27.0)
+    def_sal_0m = get_val(target_data, 'sal_0m', 30.0)
+    def_sal_5m = get_val(target_data, 'sal_5m', 31.0)
+    def_do_0m = get_val(target_data, 'do_0m', 6.0)
+    def_do_5m = get_val(target_data, 'do_5m', 5.0)
+    def_chl_0m = get_val(target_data, 'chl_0m', 1.5)
+    def_chl_5m = get_val(target_data, 'chl_5m', 1.5)
+    def_precip_day = get_val(target_data, 'precip_mm_day', 0.0)
+    def_precip = get_val(target_data, 'precip_sum_july', 150.0)
+    def_air_avg = get_val(target_data, 'air_temp_avg', 28.0)
+    def_air_month = get_val(target_data, 'air_temp_month', 26.0)
+
     st.sidebar.subheader("水温・塩分・DO・クロロフィル")
     input_temp_0m = st.sidebar.number_input("現在の0m水温 (temp_0m) ℃", value=def_temp_0m, step=0.1)
     input_temp = st.sidebar.number_input("現在の5m水温 (temp_5m) ℃", value=def_temp_5m, step=0.1)
@@ -79,31 +90,42 @@ try:
     st.subheader("⚠️ リスク判定結果")
     
     ref_2025 = df_2025[df_2025['week_num'] == input_week]
-    star_date = pd.to_datetime("2024-07-01") 
+    ref_2024 = df_2024[df_2024['week_num'] == input_week] 
+    
+    star_date = pd.to_datetime(f"2024-{input_date.month:02d}-{input_date.day:02d}")
     
     if not ref_2025.empty:
-        ref_temp = ref_2025['temp_5m'].values[0]
-        ref_precip = 64.0
-        star_date = ref_2025['plot_date'].values[0] 
+        ref_temp_2025 = ref_2025['temp_5m'].values[0]
+        ref_temp_2024 = ref_2024['temp_5m'].values[0] if not ref_2024.empty else -99.0
         
         score = 0
         reasons = []
 
         # 判定A: 水温
-        if input_temp >= ref_temp:
-            score += 3
-            reasons.append(f"水温が2025年同期（{ref_temp}℃）を超えています。")
-        elif input_temp >= 28.5:
+        if input_temp > ref_temp_2025:
             score += 2
-            reasons.append("水温が28.5℃を超え、熱ストレス圏内です。")
+            reasons.append(f"水深5mの水温が2025年同期（{ref_temp_2025}℃）を超えており、極めて危険な熱ストレス圏内です。")
+        elif input_temp >= 28.0:
+            score += 2
+            reasons.append(f"水温が28℃以上（{input_temp}℃）であり、極めて危険な熱ストレス圏内です。")
+        elif input_temp > ref_temp_2024:
+            score += 1
+            reasons.append(f"水深5mの水温が2024年同期（{ref_temp_2024}℃）を超えており、高めに推移しています。")
+        elif input_temp >= 27.0:
+            score += 1
+            reasons.append(f"水温が27℃以上（{input_temp}℃）であり、熱ストレスに警戒が必要です。")
+        else:
+            reasons.append("水深5mの水温は過去と比較して平年並み、または低い状態です。")
 
         # 判定B: 降水量
-        if input_precip <= ref_precip:
-            score += 3
-            reasons.append(f"7月の降水量が2025年（{ref_precip}mm）と同等以下の深刻な少雨です。")
-        elif input_precip <= 100:
+        if input_precip < 100:
+            score += 2
+            reasons.append(f"7月の降水量が100mm未満（{input_precip}mm）の少雨であり、高塩分・貧栄養の深刻なリスクがあります。")
+        elif input_precip < 200:
             score += 1
-            reasons.append("7月の降水量が少なく、高塩分・貧栄養のリスクがあります。")
+            reasons.append(f"7月の降水量が200mm未満（{input_precip}mm）であり、環境悪化の兆候に注意が必要です。")
+        else:
+            reasons.append(f"7月の降水量は200mm以上（{input_precip}mm）あり、平年並みの水準です。")
 
         # 判定C: クロロフィル
         if input_chl < 1.0:
@@ -117,36 +139,40 @@ try:
 
         # 判定D: DO（溶存酸素）の低下リスク
         if input_do_5m < 4.0:
-            score += 7
-            reasons.append("水深5mのDO（溶存酸素）が非常に低く（4mg/L未満）、酸欠による致命的なダメージを受けるリスクがあります。")
+            score += 5
+            reasons.append("水深5mのDO（溶存酸素）が非常に低く（4mg/L未満）、貧酸素による致命的なダメージを受けるリスクがあります。")
         elif input_do_5m < 5.0:
             score += 1
             reasons.append("水深5mのDOが低下しており（5mg/L未満）、環境ストレスがかかりやすい状態です。")
         else:
-            reasons.append("DOは十分（5mg/L以上）であり、酸欠の危険はありません。")
+            reasons.append("DOは十分（5mg/L以上）であり、貧酸素の危険性は低いです。")
 
         # 判定E: 塩分の上昇リスク
-        if input_sal_5m >= 34.0:
+        if input_sal_5m >= 33.0:
             score += 1
-            reasons.append("塩分が34以上と高くなっており、環境ストレスの要因となる可能性があります。")
+            reasons.append(f"塩分が33以上（{input_sal_5m}）と高くなっており、環境ストレスの要因となる可能性があります。")
         else:
-            reasons.append("塩分は正常な範囲内（34未満）です。")
+            reasons.append(f"塩分は正常な範囲内（{input_sal_5m}）です。")
         
-        # 結果の表示
+        # ==========================================
+        # 💡 結果の表示（閾値と色の調整）
+        # ==========================================
         if score >= 5:
             st.error(f"### 【危険：赤】リスクスコア: {score}")
             st.write("**判定：大量へい死の危険性が極めて高い状態です。直ちに対策が必要です。**")
             for r in reasons:
                 st.write(f"- {r}")
-            st.write("👉 対策案：筏を深場へ移動、または人工湧昇装置（SPALOW等）の稼働を最大化してください。")
-        elif score >= 2:
+            st.write("👉 **対策案：直ちに牡蠣の状態を確認して下さい。筏を移動させてください。**")
+            
+        elif score >= 3: # 💡 3点以上に変更
             st.warning(f"### 【警戒：黄】リスクスコア: {score}")
             st.write("**判定：環境が悪化しつつあります。今後の予報に注意してください。**")
             for r in reasons:
                 st.write(f"- {r}")
-            st.write("👉 対策案：毎日の貝の観察を強化し、早めの水揚げ準備を検討してください。")
-        else:
-            st.success(f"### 【安全：青】リスクスコア: {score}")
+            st.write("👉 **対策案：カキの様子をこまめに観察してください。筏の移動を検討してください。**")
+            
+        else: # 💡 残り（2点以下）は緑へ変更
+            st.success(f"### 【安全：緑】リスクスコア: {score}") 
             st.write("**判定：現在のところ平年並み、または安全な環境です。**")
             for r in reasons:
                 st.write(f"- {r}")
@@ -269,7 +295,7 @@ try:
             st.divider()
 
     else:
-        st.info("選択された週番号の2025年データが存在しません。")
+        st.info("選択された日付に対応する2025年データが存在しません。")
 
 except FileNotFoundError:
     st.error("エラー: `oyster_akitsu.csv` が見つかりません。ファイル名を確認してください。")
