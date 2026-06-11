@@ -5,9 +5,6 @@ import plotly.graph_objects as go
 # ページの基本設定
 st.set_page_config(page_title="安芸津牡蠣養殖リスク予測", layout="wide")
 
-st.title("🦪 安芸津牡蠣養殖：2026年環境監視プロトタイプ")
-st.write("過去（2025年）の災害級へい死データと比較して、現在のリスクを判定します。")
-
 # 1. データの読み込み
 @st.cache_data
 def load_data():
@@ -21,9 +18,6 @@ try:
     df_2025 = df[df['year'] == 2025].copy()
     df_2024 = df[df['year'] == 2024].copy()
     
-    # 2. サイドバーでの入力
-    st.sidebar.header("📡 最新の観測値を入力")
-    
     df_2026 = df[df['year'] == 2026]
     
     if not df_2026.empty:
@@ -35,20 +29,43 @@ try:
     else:
         latest_date = pd.to_datetime("2026-07-01").date()
 
-    input_date = st.sidebar.date_input("現在の観測日", value=latest_date)
+    # タイトルと更新日の表示
+    st.title("🦪 安芸津牡蠣養殖：2026年環境監視プロトタイプ")
+    st.write("過去（2025年）の災害級へい死データと比較して、現在のリスクを判定します。")
+    st.info(f"📢 **{latest_date.year}年{latest_date.month}月{latest_date.day}日 更新！**")
+
+    # 2. サイドバーでの入力
+    st.sidebar.header("📡 観測値を入力")
     
-    exact_match = df_2026[df_2026['date'].dt.date == input_date]
+    st.sidebar.info(
+        "💡 **アプリの使い方**\n"
+        "- **初期表示:** 最初に表示されている数値は、システムに登録されている**最新のデータ**です。\n"
+        "- **過去を振り返る:** カレンダーの「観測日」を変更すると、過去のデータを呼び出して当時の状況を確認できます。\n"
+        "- **自分の漁場と比較する:** ご自身で測った数値を下の枠に直接入力（書き換え）することで、自分の漁場のデータで危険度を判定・比較できます。"
+    )
+    
+    input_date = st.sidebar.date_input("観測日", value=latest_date)
+    
+    # 選択された「年」を取得
+    selected_year = input_date.year
+    df_selected_year = df[df['year'] == selected_year]
+    
+    # 週番号の計算
+    exact_match = df_selected_year[df_selected_year['date'].dt.date == input_date]
     if not exact_match.empty:
         input_week = int(exact_match['week_num'].values[0])
     else:
         input_week = input_date.isocalendar()[1]
         
-    st.sidebar.caption(f"※ 裏側のシステム判定用: 第 {input_week} 週")
+    st.sidebar.markdown(f"**{selected_year}年 第 {input_week} 週**")
 
-    if not exact_match.empty:
-        target_data = exact_match.iloc[0]
-    elif not df_2026.empty:
-        target_data = df_2026.sort_values('week_num', ascending=False).iloc[0]
+    # 選んだ「年」の同じ週のデータを探す
+    week_match = df_selected_year[df_selected_year['week_num'] == input_week]
+
+    if not week_match.empty:
+        target_data = week_match.iloc[0]
+    elif not df_selected_year.empty:
+        target_data = df_selected_year.sort_values('week_num', ascending=False).iloc[0]
     else:
         target_data = pd.Series(dtype=float)
 
@@ -66,25 +83,25 @@ try:
     def_chl_0m = get_val(target_data, 'chl_0m', 1.5)
     def_chl_5m = get_val(target_data, 'chl_5m', 1.5)
     def_precip_day = get_val(target_data, 'precip_mm_day', 0.0)
-    def_precip = get_val(target_data, 'precip_sum_july', 150.0)
-    def_air_avg = get_val(target_data, 'air_temp_avg', 28.0)
-    def_air_month = get_val(target_data, 'air_temp_month', 26.0)
+    def_precip = get_val(target_data, 'precip_sum_july', 0.0)
+    def_temp_sum_0m = get_val(target_data, 'temp_sum_0m', 2000.0)
+    def_temp_sum_5m = get_val(target_data, 'temp_sum_5m', 1900.0)
 
-    st.sidebar.subheader("水温・塩分・DO・クロロフィル")
-    input_temp_0m = st.sidebar.number_input("現在の0m水温 (temp_0m) ℃", value=def_temp_0m, step=0.1)
-    input_temp = st.sidebar.number_input("現在の5m水温 (temp_5m) ℃", value=def_temp_5m, step=0.1)
-    input_sal_0m = st.sidebar.number_input("現在の0m塩分 (sal_0m)", value=def_sal_0m, step=0.1)
-    input_sal_5m = st.sidebar.number_input("現在の5m塩分 (sal_5m)", value=def_sal_5m, step=0.1)
-    input_do_0m = st.sidebar.number_input("現在の0mDO (do_0m) mg/L", value=def_do_0m, step=0.1)
-    input_do_5m = st.sidebar.number_input("現在の5mDO (do_5m) mg/L", value=def_do_5m, step=0.1)
-    input_chl_0m = st.sidebar.number_input("現在の0mクロロフィル (chl_0m)", value=def_chl_0m, step=0.1)
-    input_chl = st.sidebar.number_input("現在の5mクロロフィル (chl_5m)", value=def_chl_5m, step=0.1)
+    st.sidebar.subheader("海洋環境データ")
+    input_temp_0m = st.sidebar.number_input("観測日の0m水温 ℃", value=def_temp_0m, step=0.1)
+    input_temp = st.sidebar.number_input("観測日の5m水温 ℃", value=def_temp_5m, step=0.1)
+    input_sal_0m = st.sidebar.number_input("観測日の0m塩分", value=def_sal_0m, step=0.1)
+    input_sal_5m = st.sidebar.number_input("観測日の5m塩分", value=def_sal_5m, step=0.1)
+    input_chl_0m = st.sidebar.number_input("観測日の0mクロロフィル", value=def_chl_0m, step=0.1)
+    input_chl = st.sidebar.number_input("観測日の5mクロロフィル", value=def_chl_5m, step=0.1)
+    input_do_0m = st.sidebar.number_input("観測日の0m溶存酸素 mg/L", value=def_do_0m, step=0.1)
+    input_do_5m = st.sidebar.number_input("観測日の5m溶存酸素 mg/L", value=def_do_5m, step=0.1)
+    input_temp_sum_0m = st.sidebar.number_input("観測日の0m積算水温 ℃", value=def_temp_sum_0m, step=10.0)
+    input_temp_sum_5m = st.sidebar.number_input("観測日の5m積算水温 ℃", value=def_temp_sum_5m, step=10.0)
     
     st.sidebar.subheader("気象データ")
     input_precip_day = st.sidebar.number_input("直近1週間の降水量 (mm)", value=def_precip_day, step=1.0)
     input_precip = st.sidebar.number_input("7月の累計降水量 (mm)", value=def_precip, step=1.0)
-    input_air_avg = st.sidebar.number_input("調査日の日平均気温 (℃)", value=def_air_avg, step=0.1)
-    input_air_month = st.sidebar.number_input("月平均気温 (℃)", value=def_air_month, step=0.1)
 
     # 3. リスク判定ロジック
     st.subheader("⚠️ リスク判定結果")
@@ -101,10 +118,10 @@ try:
         score = 0
         reasons = []
 
-        # 判定A: 水温
+        # 💡 判定A: 水温（「異常な」を削除）
         if input_temp > ref_temp_2025:
             score += 2
-            reasons.append(f"水深5mの水温が2025年同期（{ref_temp_2025}℃）を超えており、極めて危険な熱ストレス圏内です。")
+            reasons.append(f"水深5mの水温が2025年同期（{ref_temp_2025}℃）を上回るペースで推移しており、今後のさらなる水温上昇に警戒が必要です。")
         elif input_temp >= 28.0:
             score += 2
             reasons.append(f"水温が28℃以上（{input_temp}℃）であり、極めて危険な熱ストレス圏内です。")
@@ -118,7 +135,9 @@ try:
             reasons.append("水深5mの水温は過去と比較して平年並み、または低い状態です。")
 
         # 判定B: 降水量
-        if input_precip < 100:
+        if input_precip == 0.0:
+            reasons.append("7月の降水量は未観測（または時期前）のため、リスク判定から除外しています。")
+        elif input_precip < 100:
             score += 2
             reasons.append(f"7月の降水量が100mm未満（{input_precip}mm）の少雨であり、高塩分・貧栄養の深刻なリスクがあります。")
         elif input_precip < 200:
@@ -130,22 +149,22 @@ try:
         # 判定C: クロロフィル
         if input_chl < 1.0:
             score += 2
-            reasons.append("クロロフィルが非常に低く（1.0未満）、牡蠣が栄養不足に陥るリスクがあります。")
+            reasons.append("クロロフィルが非常に低く（1.0未満）、牡蠣が餌不足に陥っています。")
         elif input_chl < 2.0:
             score += 1
-            reasons.append("クロロフィルがやや低め（2.0未満）で、牡蠣の体力が低下しやすい状態です。")
+            reasons.append("クロロフィルがやや低め（2.0未満）で、牡蠣が餌不足に陥るリスクがあります。")
         else:
-            reasons.append("クロロフィルは十分（2.0以上）あり、牡蠣の栄養状態は良好です。")
+            reasons.append("クロロフィルは十分（2.0以上）あり、牡蠣の餌環境は良好です。")
 
-        # 判定D: DO（溶存酸素）の低下リスク
+        # 判定D: 溶存酸素の低下リスク
         if input_do_5m < 4.0:
             score += 5
-            reasons.append("水深5mのDO（溶存酸素）が非常に低く（4mg/L未満）、貧酸素による致命的なダメージを受けるリスクがあります。")
+            reasons.append("水深5mの溶存酸素が非常に低く（4mg/L未満）、貧酸素による致命的なダメージを受けるリスクがあります。")
         elif input_do_5m < 5.0:
             score += 1
-            reasons.append("水深5mのDOが低下しており（5mg/L未満）、環境ストレスがかかりやすい状態です。")
+            reasons.append("水深5mの溶存酸素が低下しており（5mg/L未満）、環境ストレスがかかりやすい状態です。")
         else:
-            reasons.append("DOは十分（5mg/L以上）であり、貧酸素の危険性は低いです。")
+            reasons.append("溶存酸素は十分（5mg/L以上）であり、貧酸素の危険性は低いです。")
 
         # 判定E: 塩分の上昇リスク
         if input_sal_5m >= 33.0:
@@ -154,9 +173,7 @@ try:
         else:
             reasons.append(f"塩分は正常な範囲内（{input_sal_5m}）です。")
         
-        # ==========================================
-        # 💡 結果の表示（閾値と色の調整）
-        # ==========================================
+        # 結果の表示
         if score >= 5:
             st.error(f"### 【危険：赤】リスクスコア: {score}")
             st.write("**判定：大量へい死の危険性が極めて高い状態です。直ちに対策が必要です。**")
@@ -164,14 +181,14 @@ try:
                 st.write(f"- {r}")
             st.write("👉 **対策案：直ちに牡蠣の状態を確認して下さい。筏を移動させてください。**")
             
-        elif score >= 3: # 💡 3点以上に変更
+        elif score >= 3:
             st.warning(f"### 【警戒：黄】リスクスコア: {score}")
             st.write("**判定：環境が悪化しつつあります。今後の予報に注意してください。**")
             for r in reasons:
                 st.write(f"- {r}")
             st.write("👉 **対策案：カキの様子をこまめに観察してください。筏の移動を検討してください。**")
             
-        else: # 💡 残り（2点以下）は緑へ変更
+        else:
             st.success(f"### 【安全：緑】リスクスコア: {score}") 
             st.write("**判定：現在のところ平年並み、または安全な環境です。**")
             for r in reasons:
@@ -190,12 +207,12 @@ try:
             {"title": "水深 5m 塩分", "col": "sal_5m", "y_label": "塩分", "unit": "", "input": input_sal_5m, "type": "line"},
             {"title": "水深 0m クロロフィル", "col": "chl_0m", "y_label": "クロロフィル (µg/L)", "unit": " µg/L", "input": input_chl_0m, "type": "line"},
             {"title": "水深 5m クロロフィル", "col": "chl_5m", "y_label": "クロロフィル (µg/L)", "unit": " µg/L", "input": input_chl, "type": "line"},
-            {"title": "水深 0m DO（溶存酸素）", "col": "do_0m", "y_label": "DO (mg/L)", "unit": " mg/L", "input": input_do_0m, "type": "line"},
-            {"title": "水深 5m DO（溶存酸素）", "col": "do_5m", "y_label": "DO (mg/L)", "unit": " mg/L", "input": input_do_5m, "type": "line"},
+            {"title": "水深 0m 溶存酸素", "col": "do_0m", "y_label": "溶存酸素 (mg/L)", "unit": " mg/L", "input": input_do_0m, "type": "line"},
+            {"title": "水深 5m 溶存酸素", "col": "do_5m", "y_label": "溶存酸素 (mg/L)", "unit": " mg/L", "input": input_do_5m, "type": "line"},
+            {"title": "水深 0m 積算水温", "col": "temp_sum_0m", "y_label": "積算水温 (℃)", "unit": " ℃", "input": input_temp_sum_0m, "type": "line"},
+            {"title": "水深 5m 積算水温", "col": "temp_sum_5m", "y_label": "積算水温 (℃)", "unit": " ℃", "input": input_temp_sum_5m, "type": "line"},
             {"title": "直近1週間の降水量", "col": "precip_mm_day", "y_label": "降水量 (mm)", "unit": " mm", "input": input_precip_day, "type": "line"},
             {"title": "7月の合計降水量", "col": "precip_sum_july", "y_label": "降水量 (mm)", "unit": " mm", "input": input_precip, "type": "bar"},
-            {"title": "調査日の日平均気温", "col": "air_temp_avg", "y_label": "気温 (℃)", "unit": " ℃", "input": input_air_avg, "type": "line"},
-            {"title": "月平均気温", "col": "air_temp_month", "y_label": "気温 (℃)", "unit": " ℃", "input": input_air_month, "type": "line"},
         ]
 
         tickvals = [f"2024-{m:02d}-01" for m in range(2, 11)]
@@ -232,12 +249,12 @@ try:
                 ))
                 
                 fig.add_trace(go.Scatter(
-                    x=["2026年"], 
+                    x=[f"{selected_year}年"], 
                     y=[g['input']], 
-                    name="現在の入力値", 
+                    name="観測日の値", 
                     marker=star_marker, 
                     mode="markers",
-                    hovertemplate=f'現在: %{{y}}{g["unit"]}'
+                    hovertemplate=f'観測日: %{{y}}{g["unit"]}'
                 ))
 
                 fig.update_layout(
@@ -254,7 +271,7 @@ try:
                     
                     if g['col'] in year_data.columns:
                         line_color = color_map.get(year, "gray")
-                        line_width = 4 if year == 2026 else 2
+                        line_width = 4 if year == selected_year else 2
                         
                         fig.add_trace(go.Scatter(
                             x=year_data['plot_date'], 
@@ -269,10 +286,10 @@ try:
                 fig.add_trace(go.Scatter(
                     x=[star_date], 
                     y=[g['input']], 
-                    name="現在の入力値", 
+                    name="観測日の値", 
                     marker=star_marker, 
                     mode="markers", 
-                    hovertemplate=f'現在: %{{y}}{g["unit"]}'
+                    hovertemplate=f'観測日: %{{y}}{g["unit"]}'
                 ))
 
                 fig.update_layout(
