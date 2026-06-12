@@ -17,6 +17,7 @@ try:
     df = load_data()
     df_2025 = df[df['year'] == 2025].copy()
     df_2024 = df[df['year'] == 2024].copy()
+    df_2023 = df[df['year'] == 2023].copy()
     
     df_2026 = df[df['year'] == 2026]
     
@@ -33,6 +34,21 @@ try:
     st.title("🦪 安芸津牡蠣養殖：2026年環境監視プロトタイプ")
     st.write("過去（2025年）の災害級へい死データと比較して、現在のリスクを判定します。")
     st.info(f"📢 **{latest_date.year}年{latest_date.month}月{latest_date.day}日 更新！**")
+
+    # ==========================================
+    # 💡 観測地点の表示（インタラクティブマップ）
+    # ==========================================
+    st.markdown("📍 **観測地点：三協化成沖** （CTDサンプリング地点）")
+    
+    # 自動で表示されるインタラクティブマップ（OpenStreetMapを利用・規約クリア）
+    map_data = pd.DataFrame({
+        'lat': [34.30914828361069],
+        'lon': [132.81821499692464]
+    })
+    # zoomの数値（13）は、数値を大きくするとより拡大された地図になります
+    st.map(map_data, zoom=13)
+
+    st.divider() # 区切り線を引いてスッキリさせる
 
     # 2. サイドバーでの入力
     st.sidebar.header("📡 観測値を入力")
@@ -108,26 +124,37 @@ try:
     
     ref_2025 = df_2025[df_2025['week_num'] == input_week]
     ref_2024 = df_2024[df_2024['week_num'] == input_week] 
+    ref_2023 = df_2023[df_2023['week_num'] == input_week]
     
     star_date = pd.to_datetime(f"2024-{input_date.month:02d}-{input_date.day:02d}")
     
     if not ref_2025.empty:
         ref_temp_2025 = ref_2025['temp_5m'].values[0]
-        ref_temp_2024 = ref_2024['temp_5m'].values[0] if not ref_2024.empty else -99.0
+        ref_temp_2024 = ref_2024['temp_5m'].values[0] if not ref_2024.empty else 99.0
+        ref_temp_2023 = ref_2023['temp_5m'].values[0] if not ref_2023.empty else 99.0
+        
+        str_temp_2024 = f"{ref_temp_2024}℃" if ref_temp_2024 != 99.0 else "データなし"
+        str_temp_2023 = f"{ref_temp_2023}℃" if ref_temp_2023 != 99.0 else "データなし"
         
         score = 0
         reasons = []
 
-        # 💡 判定A: 水温（「異常な」を削除）
-        if input_temp > ref_temp_2025:
+        # 判定A: 水温
+        is_over_2025 = (input_temp >= ref_temp_2025)
+        is_over_2024 = (input_temp >= ref_temp_2024)
+
+        if is_over_2025:
             score += 2
             reasons.append(f"水深5mの水温が2025年同期（{ref_temp_2025}℃）を上回るペースで推移しており、今後のさらなる水温上昇に警戒が必要です。")
+        elif is_over_2024:
+            score += 2
+            reasons.append(f"水深5mの水温が2024年同期（{str_temp_2024}）を上回るペースで推移しており、今後のさらなる水温上昇に警戒が必要です。")
         elif input_temp >= 28.0:
             score += 2
             reasons.append(f"水温が28℃以上（{input_temp}℃）であり、極めて危険な熱ストレス圏内です。")
-        elif input_temp > ref_temp_2024:
+        elif input_temp > ref_temp_2023 and ref_temp_2023 != 99.0:
             score += 1
-            reasons.append(f"水深5mの水温が2024年同期（{ref_temp_2024}℃）を超えており、高めに推移しています。")
+            reasons.append(f"水深5mの水温が2023年同期（{str_temp_2023}）を上回って推移しており、やや高めの状態です。")
         elif input_temp >= 27.0:
             score += 1
             reasons.append(f"水温が27℃以上（{input_temp}℃）であり、熱ストレスに警戒が必要です。")
@@ -144,7 +171,7 @@ try:
             score += 1
             reasons.append(f"7月の降水量が200mm未満（{input_precip}mm）であり、環境悪化の兆候に注意が必要です。")
         else:
-            reasons.append(f"7月の降水量は200mm以上（{input_precip}mm）あり、平年並みの水準です。")
+            reasons.append(f"7月の降水量は200mm以上（{input_precip}mm）あり、十分な雨が降っています。")
 
         # 判定C: クロロフィル
         if input_chl < 1.0:
@@ -175,21 +202,22 @@ try:
         
         # 結果の表示
         if score >= 5:
-            st.error(f"### 【危険：赤】リスクスコア: {score}")
-            st.write("**判定：大量へい死の危険性が極めて高い状態です。直ちに対策が必要です。**")
+            st.error(f"### 🔴 【危険：赤】リスクスコア: {score}")
+            st.caption("※スコア凡例：[🔴危険: 5点以上] [🟡警戒: 3〜4点] [🟢安全: 2点以下]")
+            st.write("**判定：大量へい死の危険性が極めて高い状態です。**")
             for r in reasons:
                 st.write(f"- {r}")
-            st.write("👉 **対策案：直ちに牡蠣の状態を確認して下さい。筏を移動させてください。**")
             
         elif score >= 3:
-            st.warning(f"### 【警戒：黄】リスクスコア: {score}")
+            st.warning(f"### 🟡 【警戒：黄】リスクスコア: {score}")
+            st.caption("※スコア凡例：[🔴危険: 5点以上] [🟡警戒: 3〜4点] [🟢安全: 2点以下]")
             st.write("**判定：環境が悪化しつつあります。今後の予報に注意してください。**")
             for r in reasons:
                 st.write(f"- {r}")
-            st.write("👉 **対策案：カキの様子をこまめに観察してください。筏の移動を検討してください。**")
             
         else:
-            st.success(f"### 【安全：緑】リスクスコア: {score}") 
+            st.success(f"### 🟢 【安全：緑】リスクスコア: {score}") 
+            st.caption("※スコア凡例：[🔴危険: 5点以上] [🟡警戒: 3〜4点] [🟢安全: 2点以下]")
             st.write("**判定：現在のところ平年並み、または安全な環境です。**")
             for r in reasons:
                 st.write(f"- {r}")
