@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import pydeck as pdk # 💡 高度な地図描画ツールを追加
 
 # ページの基本設定
 st.set_page_config(page_title="安芸津牡蠣養殖リスク予測", layout="wide")
@@ -36,19 +37,41 @@ try:
     st.info(f"📢 **{latest_date.year}年{latest_date.month}月{latest_date.day}日 更新！**")
 
     # ==========================================
-    # 💡 観測地点の表示（インタラクティブマップ）
+    # 💡 観測地点の表示（PyDeckを使った高度なマップ）
     # ==========================================
     st.markdown("📍 **観測地点：三協化成沖** （CTDサンプリング地点）")
     
-    # 自動で表示されるインタラクティブマップ（OpenStreetMapを利用・規約クリア）
-    map_data = pd.DataFrame({
-        'lat': [34.30914828361069],
-        'lon': [132.81821499692464]
-    })
-    # zoomの数値（13）は、数値を大きくするとより拡大された地図になります
-    st.map(map_data, zoom=13)
+    # 緯度・経度の設定
+    lat, lon = 34.30914828361069, 132.81821499692464
+    
+    # マップのレイヤー設定（ピンク色の円と、📍絵文字の重ね合わせ）
+    layer_circle = pdk.Layer(
+        "ScatterplotLayer",
+        data=pd.DataFrame({"lat": [lat], "lon": [lon]}),
+        get_position="[lon, lat]",
+        get_fill_color=[255, 105, 180, 200], # ホットピンク色
+        get_radius=150, # ピンクのオーラの大きさ
+    )
+    
+    layer_pin = pdk.Layer(
+        "TextLayer",
+        data=pd.DataFrame({"lat": [lat], "lon": [lon], "text": ["📍"]}),
+        get_position="[lon, lat]",
+        get_text="text",
+        get_size=40, # ピンの大きさ
+        get_alignment_baseline="'bottom'",
+    )
+    
+    # 暗くならない明るい地図（map_style="road"）を指定し、高さを300pxに縮小
+    view_state = pdk.ViewState(latitude=lat, longitude=lon, zoom=13)
+    r = pdk.Deck(
+        layers=[layer_circle, layer_pin],
+        initial_view_state=view_state,
+        map_style="road", 
+    )
+    st.pydeck_chart(r, height=300) # ここでマップの高さをコンパクトにしています
 
-    st.divider() # 区切り線を引いてスッキリさせる
+    st.divider() # 区切り線
 
     # 2. サイドバーでの入力
     st.sidebar.header("📡 観測値を入力")
