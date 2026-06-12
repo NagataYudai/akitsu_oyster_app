@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import pydeck as pdk # 💡 高度な地図描画ツールを追加
+import pydeck as pdk 
 
 # ページの基本設定
 st.set_page_config(page_title="安芸津牡蠣養殖リスク予測", layout="wide")
@@ -35,43 +35,6 @@ try:
     st.title("🦪 安芸津牡蠣養殖：2026年環境監視プロトタイプ")
     st.write("過去（2025年）の災害級へい死データと比較して、現在のリスクを判定します。")
     st.info(f"📢 **{latest_date.year}年{latest_date.month}月{latest_date.day}日 更新！**")
-
-    # ==========================================
-    # 💡 観測地点の表示（PyDeckを使った高度なマップ）
-    # ==========================================
-    st.markdown("📍 **観測地点：三協化成沖** （CTDサンプリング地点）")
-    
-    # 緯度・経度の設定
-    lat, lon = 34.30914828361069, 132.81821499692464
-    
-    # マップのレイヤー設定（ピンク色の円と、📍絵文字の重ね合わせ）
-    layer_circle = pdk.Layer(
-        "ScatterplotLayer",
-        data=pd.DataFrame({"lat": [lat], "lon": [lon]}),
-        get_position="[lon, lat]",
-        get_fill_color=[255, 105, 180, 200], # ホットピンク色
-        get_radius=150, # ピンクのオーラの大きさ
-    )
-    
-    layer_pin = pdk.Layer(
-        "TextLayer",
-        data=pd.DataFrame({"lat": [lat], "lon": [lon], "text": ["📍"]}),
-        get_position="[lon, lat]",
-        get_text="text",
-        get_size=40, # ピンの大きさ
-        get_alignment_baseline="'bottom'",
-    )
-    
-    # 暗くならない明るい地図（map_style="road"）を指定し、高さを300pxに縮小
-    view_state = pdk.ViewState(latitude=lat, longitude=lon, zoom=13)
-    r = pdk.Deck(
-        layers=[layer_circle, layer_pin],
-        initial_view_state=view_state,
-        map_style="road", 
-    )
-    st.pydeck_chart(r, height=300) # ここでマップの高さをコンパクトにしています
-
-    st.divider() # 区切り線
 
     # 2. サイドバーでの入力
     st.sidebar.header("📡 観測値を入力")
@@ -129,8 +92,8 @@ try:
     st.sidebar.subheader("海洋環境データ")
     input_temp_0m = st.sidebar.number_input("観測日の0m水温 ℃", value=def_temp_0m, step=0.1)
     input_temp = st.sidebar.number_input("観測日の5m水温 ℃", value=def_temp_5m, step=0.1)
-    input_sal_0m = st.sidebar.number_input("観測日の0m塩分", value=def_sal_0m, step=0.1)
-    input_sal_5m = st.sidebar.number_input("観測日の5m塩分", value=def_sal_5m, step=0.1)
+    input_sal_0m = st.sidebar.number_input("観測日の0m塩分 (PSU)", value=def_sal_0m, step=0.1)
+    input_sal_5m = st.sidebar.number_input("観測日の5m塩分 (PSU)", value=def_sal_5m, step=0.1)
     input_chl_0m = st.sidebar.number_input("観測日の0mクロロフィル", value=def_chl_0m, step=0.1)
     input_chl = st.sidebar.number_input("観測日の5mクロロフィル", value=def_chl_5m, step=0.1)
     input_do_0m = st.sidebar.number_input("観測日の0m溶存酸素 mg/L", value=def_do_0m, step=0.1)
@@ -219,31 +182,63 @@ try:
         # 判定E: 塩分の上昇リスク
         if input_sal_5m >= 33.0:
             score += 1
-            reasons.append(f"塩分が33以上（{input_sal_5m}）と高くなっており、環境ストレスの要因となる可能性があります。")
+            reasons.append(f"塩分が33 PSU以上（{input_sal_5m} PSU）と高くなっており、環境ストレスの要因となる可能性があります。")
         else:
-            reasons.append(f"塩分は正常な範囲内（{input_sal_5m}）です。")
+            reasons.append(f"塩分は正常な範囲内（{input_sal_5m} PSU）です。")
         
         # 結果の表示
         if score >= 5:
             st.error(f"### 🔴 【危険：赤】リスクスコア: {score}")
-            st.caption("※スコア凡例：[🔴危険: 5点以上] [🟡警戒: 3〜4点] [🟢安全: 2点以下]")
+            st.caption("スコア凡例：🔴危険: 5点以上 🟡警戒: 3〜4点 🟢安全: 2点以下")
             st.write("**判定：大量へい死の危険性が極めて高い状態です。**")
             for r in reasons:
                 st.write(f"- {r}")
             
         elif score >= 3:
             st.warning(f"### 🟡 【警戒：黄】リスクスコア: {score}")
-            st.caption("※スコア凡例：[🔴危険: 5点以上] [🟡警戒: 3〜4点] [🟢安全: 2点以下]")
+            st.caption("スコア凡例：🔴危険: 5点以上 🟡警戒: 3〜4点 🟢安全: 2点以下")
             st.write("**判定：環境が悪化しつつあります。今後の予報に注意してください。**")
             for r in reasons:
                 st.write(f"- {r}")
             
         else:
             st.success(f"### 🟢 【安全：緑】リスクスコア: {score}") 
-            st.caption("※スコア凡例：[🔴危険: 5点以上] [🟡警戒: 3〜4点] [🟢安全: 2点以下]")
+            st.caption("スコア凡例：🔴危険: 5点以上 🟡警戒: 3〜4点 🟢安全: 2点以下")
             st.write("**判定：現在のところ平年並み、または安全な環境です。**")
             for r in reasons:
                 st.write(f"- {r}")
+
+        st.divider()
+
+        # 観測地点の表示
+        st.markdown("📍 **観測地点：三協化成沖**")
+        
+        lat, lon = 34.30914828361069, 132.81821499692464
+        
+        layer_circle = pdk.Layer(
+            "ScatterplotLayer",
+            data=pd.DataFrame({"lat": [lat], "lon": [lon]}),
+            get_position="[lon, lat]",
+            get_fill_color=[255, 105, 180, 200],
+            get_radius=150, 
+        )
+        
+        layer_pin = pdk.Layer(
+            "TextLayer",
+            data=pd.DataFrame({"lat": [lat], "lon": [lon], "text": ["📍"]}),
+            get_position="[lon, lat]",
+            get_text="text",
+            get_size=40,
+            get_alignment_baseline="'bottom'",
+        )
+        
+        view_state = pdk.ViewState(latitude=lat, longitude=lon, zoom=13)
+        r = pdk.Deck(
+            layers=[layer_circle, layer_pin],
+            initial_view_state=view_state,
+            map_style="road", 
+        )
+        st.pydeck_chart(r, height=300)
 
         # 4. 可視化（グラフ表示の自動化）
         st.divider()
@@ -251,19 +246,34 @@ try:
         
         color_map = {2026: "orange", 2025: "red", 2024: "yellowgreen", 2023: "cyan"}
         
-        graphs_config = [
-            {"title": "水深 0m 水温", "col": "temp_0m", "y_label": "水温 (℃)", "unit": "℃", "input": input_temp_0m, "type": "line"},
-            {"title": "水深 5m 水温", "col": "temp_5m", "y_label": "水温 (℃)", "unit": "℃", "input": input_temp, "type": "line"},
-            {"title": "水深 0m 塩分", "col": "sal_0m", "y_label": "塩分", "unit": "", "input": input_sal_0m, "type": "line"},
-            {"title": "水深 5m 塩分", "col": "sal_5m", "y_label": "塩分", "unit": "", "input": input_sal_5m, "type": "line"},
-            {"title": "水深 0m クロロフィル", "col": "chl_0m", "y_label": "クロロフィル (µg/L)", "unit": " µg/L", "input": input_chl_0m, "type": "line"},
-            {"title": "水深 5m クロロフィル", "col": "chl_5m", "y_label": "クロロフィル (µg/L)", "unit": " µg/L", "input": input_chl, "type": "line"},
-            {"title": "水深 0m 溶存酸素", "col": "do_0m", "y_label": "溶存酸素 (mg/L)", "unit": " mg/L", "input": input_do_0m, "type": "line"},
-            {"title": "水深 5m 溶存酸素", "col": "do_5m", "y_label": "溶存酸素 (mg/L)", "unit": " mg/L", "input": input_do_5m, "type": "line"},
-            {"title": "水深 0m 積算水温", "col": "temp_sum_0m", "y_label": "積算水温 (℃)", "unit": " ℃", "input": input_temp_sum_0m, "type": "line"},
-            {"title": "水深 5m 積算水温", "col": "temp_sum_5m", "y_label": "積算水温 (℃)", "unit": " ℃", "input": input_temp_sum_5m, "type": "line"},
-            {"title": "直近1週間の降水量", "col": "precip_mm_day", "y_label": "降水量 (mm)", "unit": " mm", "input": input_precip_day, "type": "line"},
-            {"title": "7月の合計降水量", "col": "precip_sum_july", "y_label": "降水量 (mm)", "unit": " mm", "input": input_precip, "type": "bar"},
+        graph_sections = [
+            {
+                "section_title": "■ 水深 5m",
+                "graphs": [
+                    {"title": "水温", "icon": "🌡️", "col": "temp_5m", "y_label": "水温 (℃)", "unit": "℃", "input": input_temp, "type": "line"},
+                    {"title": "塩分", "icon": "💠", "col": "sal_5m", "y_label": "塩分 (PSU)", "unit": " PSU", "input": input_sal_5m, "type": "line"},
+                    {"title": "クロロフィル", "icon": "🟢", "col": "chl_5m", "y_label": "クロロフィル (µg/L)", "unit": " µg/L", "input": input_chl, "type": "line"},
+                    {"title": "溶存酸素", "icon": "⚪", "col": "do_5m", "y_label": "溶存酸素 (mg/L)", "unit": " mg/L", "input": input_do_5m, "type": "line"},
+                    {"title": "積算水温", "icon": "📈", "col": "temp_sum_5m", "y_label": "積算水温 (℃)", "unit": " ℃", "input": input_temp_sum_5m, "type": "line"},
+                ]
+            },
+            {
+                "section_title": "■ 水深 0m",
+                "graphs": [
+                    {"title": "水温", "icon": "🌡️", "col": "temp_0m", "y_label": "水温 (℃)", "unit": "℃", "input": input_temp_0m, "type": "line"},
+                    {"title": "塩分", "icon": "💠", "col": "sal_0m", "y_label": "塩分 (PSU)", "unit": " PSU", "input": input_sal_0m, "type": "line"},
+                    {"title": "クロロフィル", "icon": "🟢", "col": "chl_0m", "y_label": "クロロフィル (µg/L)", "unit": " µg/L", "input": input_chl_0m, "type": "line"},
+                    {"title": "溶存酸素", "icon": "⚪", "col": "do_0m", "y_label": "溶存酸素 (mg/L)", "unit": " mg/L", "input": input_do_0m, "type": "line"},
+                    {"title": "積算水温", "icon": "📈", "col": "temp_sum_0m", "y_label": "積算水温 (℃)", "unit": " ℃", "input": input_temp_sum_0m, "type": "line"},
+                ]
+            },
+            {
+                "section_title": "■ 気象データ",
+                "graphs": [
+                    {"title": "直近1週間の降水量", "icon": "🌧️", "col": "precip_mm_day", "y_label": "降水量 (mm)", "unit": " mm", "input": input_precip_day, "type": "line"},
+                    {"title": "7月の合計降水量", "icon": "🌧️", "col": "precip_sum_july", "y_label": "降水量 (mm)", "unit": " mm", "input": input_precip, "type": "bar"},
+                ]
+            }
         ]
 
         tickvals = [f"2024-{m:02d}-01" for m in range(2, 11)]
@@ -271,96 +281,137 @@ try:
         
         star_marker = dict(size=18, color="#FFD700", symbol="star", line=dict(color="black", width=1))
 
-        for g in graphs_config:
-            st.subheader(f"📈 {g['title']}")
-            fig = go.Figure()
+        for section in graph_sections:
+            st.subheader(section["section_title"])
             
-            graph_type = g.get("type", "line") 
-            
-            if graph_type == "bar":
-                years_list = []
-                values_list = []
-                colors_list = []
+            for g in section["graphs"]:
+                st.markdown(f"#### {g['icon']} {g['title']}")
                 
-                for year in sorted(df['year'].unique()):
-                    year_data = df[df['year'] == year]
-                    if g['col'] in year_data.columns:
-                        valid_data = year_data[g['col']].dropna()
-                        if not valid_data.empty:
-                            years_list.append(f"{int(year)}年")
-                            values_list.append(valid_data.values[0])
-                            colors_list.append(color_map.get(year, "gray"))
-                
-                fig.add_trace(go.Bar(
-                    x=years_list, 
-                    y=values_list, 
-                    marker_color=colors_list,
-                    name="実績値",
-                    hovertemplate=f'%{{y}}{g["unit"]}'
-                ))
-                
-                fig.add_trace(go.Scatter(
-                    x=[f"{selected_year}年"], 
-                    y=[g['input']], 
-                    name="観測日の値", 
-                    marker=star_marker, 
-                    mode="markers",
-                    hovertemplate=f'観測日: %{{y}}{g["unit"]}'
-                ))
-
-                fig.update_layout(
-                    xaxis_title="年",
-                    yaxis_title=g['y_label'],
-                    height=350,
-                    showlegend=False, 
-                    margin=dict(l=10, r=10, t=30, b=10)
-                )
-
-            else:
-                for year in sorted(df['year'].unique()):
-                    year_data = df[df['year'] == year]
+                # 💡 水温グラフのみにキャプション（説明文）を追加
+                if g['col'] in ['temp_0m', 'temp_5m']:
+                    st.caption("※ 背景のうす赤色の範囲は、平年（2023年）以上の値を示しています。")
                     
-                    if g['col'] in year_data.columns:
-                        line_color = color_map.get(year, "gray")
-                        line_width = 4 if year == selected_year else 2
-                        
-                        fig.add_trace(go.Scatter(
-                            x=year_data['plot_date'], 
-                            y=year_data[g['col']], 
-                            name=f"{int(year)}年", 
-                            line=dict(color=line_color, width=line_width),
-                            mode='lines+markers',
-                            hovertemplate=f'%{{y}}{g["unit"]}',
-                            connectgaps=True
-                        ))
+                fig = go.Figure()
                 
-                fig.add_trace(go.Scatter(
-                    x=[star_date], 
-                    y=[g['input']], 
-                    name="観測日の値", 
-                    marker=star_marker, 
-                    mode="markers", 
-                    hovertemplate=f'観測日: %{{y}}{g["unit"]}'
-                ))
+                graph_type = g.get("type", "line") 
+                
+                if graph_type == "bar":
+                    years_list = []
+                    values_list = []
+                    colors_list = []
+                    
+                    for year in sorted(df['year'].unique()):
+                        year_data = df[df['year'] == year]
+                        if g['col'] in year_data.columns:
+                            valid_data = year_data[g['col']].dropna()
+                            if not valid_data.empty:
+                                years_list.append(f"{int(year)}年")
+                                values_list.append(valid_data.values[0])
+                                colors_list.append(color_map.get(year, "gray"))
+                    
+                    fig.add_trace(go.Bar(
+                        x=years_list, 
+                        y=values_list, 
+                        marker_color=colors_list,
+                        name="実績値",
+                        hovertemplate=f'%{{y}}{g["unit"]}'
+                    ))
+                    
+                    fig.add_trace(go.Scatter(
+                        x=[f"{selected_year}年"], 
+                        y=[g['input']], 
+                        name="観測日の値", 
+                        marker=star_marker, 
+                        mode="markers",
+                        hovertemplate=f'観測日: %{{y}}{g["unit"]}'
+                    ))
 
-                fig.update_layout(
-                    xaxis=dict(
-                        title="",
-                        tickmode="array",
-                        tickvals=tickvals,
-                        ticktext=ticktext, 
-                        range=["2024-02-01", "2024-10-31"],
-                        hoverformat="%-m月%-d日" 
-                    ),
-                    yaxis_title=g['y_label'], 
-                    hovermode="x unified",
-                    height=350,
-                    legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
-                    margin=dict(l=10, r=10, t=30, b=10)
-                )
+                    fig.update_layout(
+                        xaxis_title="年",
+                        yaxis_title=g['y_label'],
+                        height=350,
+                        showlegend=False, 
+                        margin=dict(l=10, r=10, t=30, b=10)
+                    )
 
-            st.plotly_chart(fig, use_container_width=True)
-            st.divider()
+                else:
+                    for year in sorted(df['year'].unique()):
+                        year_data = df[df['year'] == year]
+                        
+                        if g['col'] in year_data.columns:
+                            line_color = color_map.get(year, "gray")
+                            line_width = 4 if year == selected_year else 2
+                            
+                            fig.add_trace(go.Scatter(
+                                x=year_data['plot_date'], 
+                                y=year_data[g['col']], 
+                                name=f"{int(year)}年", 
+                                line=dict(color=line_color, width=line_width),
+                                mode='lines+markers',
+                                hovertemplate=f'%{{y}}{g["unit"]}',
+                                connectgaps=True
+                            ))
+                            
+                            # 2023年の水温グラフの場合、その上部を「うす赤色」で塗りつぶす
+                            if year == 2023 and g['col'] in ['temp_0m', 'temp_5m']:
+                                max_col_val = df[g['col']].max(skipna=True)
+                                max_y = max(max_col_val if pd.notnull(max_col_val) else 30.0, g['input']) + 2.0
+                                fig.add_trace(go.Scatter(
+                                    x=year_data['plot_date'], 
+                                    y=[max_y] * len(year_data), 
+                                    name="平年以上の値（2023年超過）",
+                                    line=dict(width=0),
+                                    fill='tonexty',
+                                    fillcolor='rgba(255, 0, 0, 0.1)', 
+                                    showlegend=False,
+                                    hoverinfo='skip',
+                                    connectgaps=True
+                                ))
+                    
+                    fig.add_trace(go.Scatter(
+                        x=[star_date], 
+                        y=[g['input']], 
+                        name="観測日の値", 
+                        marker=star_marker, 
+                        mode="markers", 
+                        hovertemplate=f'観測日: %{{y}}{g["unit"]}'
+                    ))
+
+                    # 各グラフに対する目安ラインを「グレーの破線」に統一
+                    col_name = g['col']
+                    if col_name in ['temp_sum_0m', 'temp_sum_5m']:
+                        fig.add_hline(y=600, line_dash="dash", line_color="gray", annotation_text="産卵開始 600℃", annotation_position="bottom right")
+                        fig.add_hline(y=900, line_dash="dash", line_color="gray", annotation_text="採苗目安 900℃", annotation_position="bottom right")
+                    
+                    elif col_name in ['do_0m', 'do_5m']:
+                        fig.add_hline(y=5, line_dash="dash", line_color="gray", annotation_text="酸素低下 5mg/L", annotation_position="bottom right")
+                        fig.add_hline(y=4, line_dash="dash", line_color="gray", annotation_text="要警戒 4mg/L", annotation_position="bottom right")
+                    
+                    elif col_name in ['chl_0m', 'chl_5m']:
+                        fig.add_hline(y=2, line_dash="dash", line_color="gray", annotation_text="餌料豊富 2µg/L", annotation_position="bottom right")
+                        fig.add_hline(y=1, line_dash="dash", line_color="gray", annotation_text="餌不足 1µg/L", annotation_position="bottom right")
+                    
+                    elif col_name in ['sal_0m', 'sal_5m']:
+                        fig.add_hline(y=33, line_dash="dash", line_color="gray", annotation_text="高塩分 33 PSU", annotation_position="bottom right")
+
+                    fig.update_layout(
+                        xaxis=dict(
+                            title="",
+                            tickmode="array",
+                            tickvals=tickvals,
+                            ticktext=ticktext, 
+                            range=["2024-02-01", "2024-10-31"],
+                            hoverformat="%-m月%-d日" 
+                        ),
+                        yaxis_title=g['y_label'], 
+                        hovermode="x unified",
+                        height=350,
+                        legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
+                        margin=dict(l=10, r=10, t=30, b=10)
+                    )
+
+                st.plotly_chart(fig, use_container_width=True)
+                st.divider()
 
     else:
         st.info("選択された日付に対応する2025年データが存在しません。")
