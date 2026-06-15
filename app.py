@@ -33,8 +33,12 @@ try:
 
     # タイトルと更新日の表示
     st.title("🦪 安芸津牡蠣養殖：2026年環境監視プロトタイプ")
-    st.write("過去（2025年）の災害級へい死データと比較して、現在のリスクを判定します。")
+    
+    # 💡 冒頭の文言を引き締まった表現に修正
+    st.write("過去の環境推移から、現在のへい死リスクを判定します。")
     st.info(f"📢 **{latest_date.year}年{latest_date.month}月{latest_date.day}日 更新！**")
+
+    st.divider()
 
     # 2. サイドバーでの入力
     st.sidebar.header("📡 観測値を入力")
@@ -287,7 +291,6 @@ try:
             for g in section["graphs"]:
                 st.markdown(f"#### {g['icon']} {g['title']}")
                 
-                # 💡 水温グラフのみにキャプション（説明文）を追加
                 if g['col'] in ['temp_0m', 'temp_5m']:
                     st.caption("※ 背景のうす赤色の範囲は、平年（2023年）以上の値を示しています。")
                     
@@ -352,7 +355,6 @@ try:
                                 connectgaps=True
                             ))
                             
-                            # 2023年の水温グラフの場合、その上部を「うす赤色」で塗りつぶす
                             if year == 2023 and g['col'] in ['temp_0m', 'temp_5m']:
                                 max_col_val = df[g['col']].max(skipna=True)
                                 max_y = max(max_col_val if pd.notnull(max_col_val) else 30.0, g['input']) + 2.0
@@ -377,7 +379,6 @@ try:
                         hovertemplate=f'観測日: %{{y}}{g["unit"]}'
                     ))
 
-                    # 各グラフに対する目安ラインを「グレーの破線」に統一
                     col_name = g['col']
                     if col_name in ['temp_sum_0m', 'temp_sum_5m']:
                         fig.add_hline(y=600, line_dash="dash", line_color="gray", annotation_text="産卵開始 600℃", annotation_position="bottom right")
@@ -413,8 +414,17 @@ try:
                 st.plotly_chart(fig, use_container_width=True)
                 st.divider()
 
-    else:
-        st.info("選択された日付に対応する2025年データが存在しません。")
+    st.markdown("""
+    <div style="font-size: 0.8em; color: gray; margin-top: 50px;">
+        <strong>免責事項およびデータの取り扱いについて</strong><br>
+        本システムは、安芸津海域における環境監視およびへい死リスクの予測を目的とした研究用プロトタイプです。<br>
+        提供するデータや判定結果の正確性・完全性について、いかなる保証も行うものではありません。<br>
+        <strong>本システムに掲載されているデータ、グラフ、判定結果等について、無断での抽出、加工、転載、および販売等の二次利用（商用利用）を固く禁じます。</strong><br>
+        本システムの利用に伴って生じたトラブルや損害について、当研究室は一切の責任を負いません。<br>
+        本システムは予告なく仕様変更、または公開を停止する場合があります。<br><br>
+        運営・著作権表記： 広島大学 統合生命科学研究科 小池研究室
+    </div>
+    """, unsafe_allow_html=True)
 
 except FileNotFoundError:
     st.error("エラー: `oyster_akitsu.csv` が見つかりません。ファイル名を確認してください。")
