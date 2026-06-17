@@ -34,7 +34,6 @@ try:
     # タイトルと更新日の表示
     st.title("🦪 安芸津牡蠣養殖：2026年環境監視プロトタイプ")
     
-    # 💡 冒頭の文言を引き締まった表現に修正
     st.write("過去の環境推移から、現在のへい死リスクを判定します。")
     st.info(f"📢 **{latest_date.year}年{latest_date.month}月{latest_date.day}日 更新！**")
 
@@ -75,23 +74,34 @@ try:
     else:
         target_data = pd.Series(dtype=float)
 
-    def get_val(data_row, col_name, default_val):
+    is_missing_week = False
+    if 'is_interpolated' in target_data and pd.notnull(target_data['is_interpolated']):
+        if float(target_data['is_interpolated']) == 1.0:
+            is_missing_week = True
+    elif target_data.empty:
+        is_missing_week = True
+
+    # 💡 シンプルなメッセージに修正
+    if is_missing_week:
+        st.sidebar.warning("選択された週は「未観測」です。")
+
+    def get_val(data_row, col_name):
         if col_name in data_row and pd.notnull(data_row[col_name]):
             return float(data_row[col_name])
-        return default_val
+        return None
 
-    def_temp_0m = get_val(target_data, 'temp_0m', 28.0)
-    def_temp_5m = get_val(target_data, 'temp_5m', 27.0)
-    def_sal_0m = get_val(target_data, 'sal_0m', 30.0)
-    def_sal_5m = get_val(target_data, 'sal_5m', 31.0)
-    def_do_0m = get_val(target_data, 'do_0m', 6.0)
-    def_do_5m = get_val(target_data, 'do_5m', 5.0)
-    def_chl_0m = get_val(target_data, 'chl_0m', 1.5)
-    def_chl_5m = get_val(target_data, 'chl_5m', 1.5)
-    def_precip_day = get_val(target_data, 'precip_mm_day', 0.0)
-    def_precip = get_val(target_data, 'precip_sum_july', 0.0)
-    def_temp_sum_0m = get_val(target_data, 'temp_sum_0m', 2000.0)
-    def_temp_sum_5m = get_val(target_data, 'temp_sum_5m', 1900.0)
+    def_temp_0m = get_val(target_data, 'temp_0m')
+    def_temp_5m = get_val(target_data, 'temp_5m')
+    def_sal_0m = get_val(target_data, 'sal_0m')
+    def_sal_5m = get_val(target_data, 'sal_5m')
+    def_do_0m = get_val(target_data, 'do_0m')
+    def_do_5m = get_val(target_data, 'do_5m')
+    def_chl_0m = get_val(target_data, 'chl_0m')
+    def_chl_5m = get_val(target_data, 'chl_5m')
+    def_precip_day = get_val(target_data, 'precip_mm_day')
+    def_precip = get_val(target_data, 'precip_sum_july')
+    def_temp_sum_0m = get_val(target_data, 'temp_sum_0m')
+    def_temp_sum_5m = get_val(target_data, 'temp_sum_5m')
 
     st.sidebar.subheader("海洋環境データ")
     input_temp_0m = st.sidebar.number_input("観測日の0m水温 ℃", value=def_temp_0m, step=0.1)
@@ -130,68 +140,90 @@ try:
         reasons = []
 
         # 判定A: 水温
-        is_over_2025 = (input_temp >= ref_temp_2025)
-        is_over_2024 = (input_temp >= ref_temp_2024)
+        if input_temp is not None:
+            is_over_2025 = (input_temp >= ref_temp_2025)
+            is_over_2024 = (input_temp >= ref_temp_2024)
 
-        if is_over_2025:
-            score += 2
-            reasons.append(f"水深5mの水温が2025年同期（{ref_temp_2025}℃）を上回るペースで推移しており、今後のさらなる水温上昇に警戒が必要です。")
-        elif is_over_2024:
-            score += 2
-            reasons.append(f"水深5mの水温が2024年同期（{str_temp_2024}）を上回るペースで推移しており、今後のさらなる水温上昇に警戒が必要です。")
-        elif input_temp >= 28.0:
-            score += 2
-            reasons.append(f"水温が28℃以上（{input_temp}℃）であり、極めて危険な熱ストレス圏内です。")
-        elif input_temp > ref_temp_2023 and ref_temp_2023 != 99.0:
-            score += 1
-            reasons.append(f"水深5mの水温が2023年同期（{str_temp_2023}）を上回って推移しており、やや高めの状態です。")
-        elif input_temp >= 27.0:
-            score += 1
-            reasons.append(f"水温が27℃以上（{input_temp}℃）であり、熱ストレスに警戒が必要です。")
+            if is_over_2025:
+                score += 2
+                reasons.append(f"水深5mの水温が2025年同期（{ref_temp_2025}℃）を上回るペースで推移しており、今後のさらなる水温上昇に警戒が必要です。")
+            elif is_over_2024:
+                score += 2
+                reasons.append(f"水深5mの水温が2024年同期（{str_temp_2024}）を上回るペースで推移しており、今後のさらなる水温上昇に警戒が必要です。")
+            elif input_temp >= 28.0:
+                score += 2
+                reasons.append(f"水温が28℃以上（{input_temp}℃）であり、極めて危険な熱ストレス圏内です。")
+            elif input_temp > ref_temp_2023 and ref_temp_2023 != 99.0:
+                score += 1
+                reasons.append(f"水深5mの水温が2023年同期（{str_temp_2023}）を上回って推移しており、やや高めの状態です。")
+            elif input_temp >= 27.0:
+                score += 1
+                reasons.append(f"水温が27℃以上（{input_temp}℃）であり、熱ストレスに警戒が必要です。")
+            else:
+                reasons.append(f"水深5mの水温は過去と比較して平年並み、または低い状態です。（{input_temp}℃）")
         else:
-            reasons.append("水深5mの水温は過去と比較して平年並み、または低い状態です。")
+            reasons.append("水深5mの水温は「未観測」のため、判定から除外しています。")
 
         # 判定B: 降水量
-        if input_precip == 0.0:
-            reasons.append("7月の降水量は未観測（または時期前）のため、リスク判定から除外しています。")
-        elif input_precip < 100:
-            score += 2
-            reasons.append(f"7月の降水量が100mm未満（{input_precip}mm）の少雨であり、高塩分・貧栄養の深刻なリスクがあります。")
-        elif input_precip < 200:
-            score += 1
-            reasons.append(f"7月の降水量が200mm未満（{input_precip}mm）であり、環境悪化の兆候に注意が必要です。")
+        if input_precip is not None:
+            if input_precip == 0.0:
+                reasons.append("7月の降水量は時期前のため、リスク判定から除外しています。")
+            elif input_precip < 100:
+                score += 2
+                reasons.append(f"7月の降水量が100mm未満（{input_precip}mm）の少雨であり、高塩分・貧栄養の深刻なリスクがあります。")
+            elif input_precip < 200:
+                score += 1
+                reasons.append(f"7月の降水量が200mm未満（{input_precip}mm）であり、環境悪化の兆候に注意が必要です。")
+            else:
+                reasons.append(f"7月の降水量は200mm以上（{input_precip}mm）あり、十分な雨が降っています。")
         else:
-            reasons.append(f"7月の降水量は200mm以上（{input_precip}mm）あり、十分な雨が降っています。")
+            reasons.append("7月の降水量は「未観測」のため、判定から除外しています。")
 
         # 判定C: クロロフィル
-        if input_chl < 1.0:
-            score += 2
-            reasons.append("クロロフィルが非常に低く（1.0未満）、牡蠣が餌不足に陥っています。")
-        elif input_chl < 2.0:
-            score += 1
-            reasons.append("クロロフィルがやや低め（2.0未満）で、牡蠣が餌不足に陥るリスクがあります。")
+        if input_chl is not None:
+            if input_chl < 1.0:
+                score += 2
+                reasons.append(f"クロロフィルが非常に低く（{input_chl} µg/L）、牡蠣が餌不足に陥っています。")
+            elif input_chl < 2.0:
+                score += 1
+                reasons.append(f"クロロフィルがやや低め（{input_chl} µg/L）で、牡蠣が餌不足に陥るリスクがあります。")
+            else:
+                reasons.append(f"クロロフィルは十分（{input_chl} µg/L）あり、牡蠣の餌環境は良好です。")
         else:
-            reasons.append("クロロフィルは十分（2.0以上）あり、牡蠣の餌環境は良好です。")
+            reasons.append("水深5mのクロロフィルは「未観測」のため、判定から除外しています。")
 
         # 判定D: 溶存酸素の低下リスク
-        if input_do_5m < 4.0:
-            score += 5
-            reasons.append("水深5mの溶存酸素が非常に低く（4mg/L未満）、貧酸素による致命的なダメージを受けるリスクがあります。")
-        elif input_do_5m < 5.0:
-            score += 1
-            reasons.append("水深5mの溶存酸素が低下しており（5mg/L未満）、環境ストレスがかかりやすい状態です。")
+        if input_do_5m is not None:
+            if input_do_5m < 4.0:
+                score += 5
+                reasons.append(f"水深5mの溶存酸素が非常に低く（{input_do_5m} mg/L）、貧酸素による致命的なダメージを受けるリスクがあります。")
+            elif input_do_5m < 5.0:
+                score += 1
+                reasons.append(f"水深5mの溶存酸素が低下しており（{input_do_5m} mg/L）、環境ストレスがかかりやすい状態です。")
+            else:
+                reasons.append(f"溶存酸素は十分（{input_do_5m} mg/L）であり、貧酸素の危険性は低いです。")
         else:
-            reasons.append("溶存酸素は十分（5mg/L以上）であり、貧酸素の危険性は低いです。")
+            reasons.append("水深5mの溶存酸素は「未観測」のため、判定から除外しています。")
 
         # 判定E: 塩分の上昇リスク
-        if input_sal_5m >= 33.0:
-            score += 1
-            reasons.append(f"塩分が33 PSU以上（{input_sal_5m} PSU）と高くなっており、環境ストレスの要因となる可能性があります。")
+        if input_sal_5m is not None:
+            if input_sal_5m >= 33.0:
+                score += 1
+                reasons.append(f"塩分が33 PSU以上（{input_sal_5m} PSU）と高くなっており、環境ストレスの要因となる可能性があります。")
+            else:
+                reasons.append(f"塩分は正常な範囲内（{input_sal_5m} PSU）です。")
         else:
-            reasons.append(f"塩分は正常な範囲内（{input_sal_5m} PSU）です。")
+            reasons.append("水深5mの塩分は「未観測」のため、判定から除外しています。")
         
-        # 結果の表示
-        if score >= 5:
+        valid_inputs = [x for x in [input_temp, input_precip, input_chl, input_do_5m, input_sal_5m] if x is not None]
+        
+        if len(valid_inputs) == 0:
+            st.info("### ⚪ 【判定不能】データがありません")
+            st.write("**判定：すべての必須項目が未観測のため、リスク判定が行えません。**")
+            for r in reasons:
+                st.write(f"- {r}")
+                
+        elif score >= 5:
             st.error(f"### 🔴 【危険：赤】リスクスコア: {score}")
             st.caption("スコア凡例：🔴危険: 5点以上 🟡警戒: 3〜4点 🟢安全: 2点以下")
             st.write("**判定：大量へい死の危険性が極めて高い状態です。**")
@@ -320,14 +352,15 @@ try:
                         hovertemplate=f'%{{y}}{g["unit"]}'
                     ))
                     
-                    fig.add_trace(go.Scatter(
-                        x=[f"{selected_year}年"], 
-                        y=[g['input']], 
-                        name="観測日の値", 
-                        marker=star_marker, 
-                        mode="markers",
-                        hovertemplate=f'観測日: %{{y}}{g["unit"]}'
-                    ))
+                    if g['input'] is not None:
+                        fig.add_trace(go.Scatter(
+                            x=[f"{selected_year}年"], 
+                            y=[g['input']], 
+                            name="観測日の値", 
+                            marker=star_marker, 
+                            mode="markers",
+                            hovertemplate=f'観測日: %{{y}}{g["unit"]}'
+                        ))
 
                     fig.update_layout(
                         xaxis_title="年",
@@ -352,12 +385,13 @@ try:
                                 line=dict(color=line_color, width=line_width),
                                 mode='lines+markers',
                                 hovertemplate=f'%{{y}}{g["unit"]}',
-                                connectgaps=True
+                                connectgaps=True 
                             ))
                             
                             if year == 2023 and g['col'] in ['temp_0m', 'temp_5m']:
                                 max_col_val = df[g['col']].max(skipna=True)
-                                max_y = max(max_col_val if pd.notnull(max_col_val) else 30.0, g['input']) + 2.0
+                                input_val = g['input'] if g['input'] is not None else 0.0
+                                max_y = max(max_col_val if pd.notnull(max_col_val) else 30.0, input_val) + 2.0
                                 fig.add_trace(go.Scatter(
                                     x=year_data['plot_date'], 
                                     y=[max_y] * len(year_data), 
@@ -370,14 +404,15 @@ try:
                                     connectgaps=True
                                 ))
                     
-                    fig.add_trace(go.Scatter(
-                        x=[star_date], 
-                        y=[g['input']], 
-                        name="観測日の値", 
-                        marker=star_marker, 
-                        mode="markers", 
-                        hovertemplate=f'観測日: %{{y}}{g["unit"]}'
-                    ))
+                    if g['input'] is not None:
+                        fig.add_trace(go.Scatter(
+                            x=[star_date], 
+                            y=[g['input']], 
+                            name="観測日の値", 
+                            marker=star_marker, 
+                            mode="markers", 
+                            hovertemplate=f'観測日: %{{y}}{g["unit"]}'
+                        ))
 
                     col_name = g['col']
                     if col_name in ['temp_sum_0m', 'temp_sum_5m']:
