@@ -32,30 +32,30 @@ try:
         latest_date = pd.to_datetime("2026-07-01").date()
 
     # タイトルと更新日の表示
-    st.title("🦪 安芸津牡蠣養殖：2026年環境監視プロトタイプ")
+    st.title("🦪 安芸津牡蠣養殖 環境リスク監視システム")
     
     st.write("過去の環境推移から、現在のへい死リスクを判定します。")
     st.info(f"📢 **{latest_date.year}年{latest_date.month}月{latest_date.day}日 更新！**")
+    
+    st.info(
+        "💡 **アプリの使い方**\n"
+        "- **初期表示:** システムに登録されている最新のデータです。\n"
+        "- **過去を振り返る:** 画面左上の「＞＞」マークをタップするとメニューが開きます。カレンダーの「観測日」を変更すると、過去のデータを呼び出して当時の状況を確認できます。\n"
+        "- **自分の漁場と比較する:** ご自身で測った数値を直接入力することで自身の漁場の危険度を判定できます。"
+    )
 
     st.divider()
 
     # 2. サイドバーでの入力
     st.sidebar.header("📡 観測値を入力")
     
-    st.sidebar.info(
-        "💡 **アプリの使い方**\n"
-        "- **初期表示:** 最初に表示されている数値は、システムに登録されている**最新のデータ**です。\n"
-        "- **過去を振り返る:** カレンダーの「観測日」を変更すると、過去のデータを呼び出して当時の状況を確認できます。\n"
-        "- **自分の漁場と比較する:** ご自身で測った数値を下の枠に直接入力（書き換え）することで、自分の漁場のデータで危険度を判定・比較できます。"
-    )
-    
     input_date = st.sidebar.date_input("観測日", value=latest_date)
     
-    # 選択された「年」を取得
+    is_future_date = input_date > latest_date
+    
     selected_year = input_date.year
     df_selected_year = df[df['year'] == selected_year]
     
-    # 週番号の計算
     exact_match = df_selected_year[df_selected_year['date'].dt.date == input_date]
     if not exact_match.empty:
         input_week = int(exact_match['week_num'].values[0])
@@ -64,7 +64,6 @@ try:
         
     st.sidebar.markdown(f"**{selected_year}年 第 {input_week} 週**")
 
-    # 選んだ「年」の同じ週のデータを探す
     week_match = df_selected_year[df_selected_year['week_num'] == input_week]
 
     if not week_match.empty:
@@ -74,14 +73,16 @@ try:
     else:
         target_data = pd.Series(dtype=float)
 
-    is_missing_week = False
-    if 'is_interpolated' in target_data and pd.notnull(target_data['is_interpolated']):
-        if float(target_data['is_interpolated']) == 1.0:
-            is_missing_week = True
-    elif target_data.empty:
-        is_missing_week = True
+    is_off_season = (input_week <= 6) or (input_week >= 44)
 
-    # 💡 シンプルなメッセージに修正
+    is_missing_week = False
+    if not is_future_date and not is_off_season:
+        if 'is_interpolated' in target_data and pd.notnull(target_data['is_interpolated']):
+            if float(target_data['is_interpolated']) == 1.0:
+                is_missing_week = True
+        elif target_data.empty:
+            is_missing_week = True
+
     if is_missing_week:
         st.sidebar.warning("選択された週は「未観測」です。")
 
@@ -116,133 +117,145 @@ try:
     input_temp_sum_5m = st.sidebar.number_input("観測日の5m積算水温 ℃", value=def_temp_sum_5m, step=10.0)
     
     st.sidebar.subheader("気象データ")
-    input_precip_day = st.sidebar.number_input("直近1週間の降水量 (mm)", value=def_precip_day, step=1.0)
+    input_precip_day = st.sidebar.number_input("週間降水量 (mm)", value=def_precip_day, step=1.0)
     input_precip = st.sidebar.number_input("7月の累計降水量 (mm)", value=def_precip, step=1.0)
 
     # 3. リスク判定ロジック
     st.subheader("⚠️ リスク判定結果")
     
-    ref_2025 = df_2025[df_2025['week_num'] == input_week]
-    ref_2024 = df_2024[df_2024['week_num'] == input_week] 
-    ref_2023 = df_2023[df_2023['week_num'] == input_week]
-    
     star_date = pd.to_datetime(f"2024-{input_date.month:02d}-{input_date.day:02d}")
     
-    if not ref_2025.empty:
-        ref_temp_2025 = ref_2025['temp_5m'].values[0]
-        ref_temp_2024 = ref_2024['temp_5m'].values[0] if not ref_2024.empty else 99.0
-        ref_temp_2023 = ref_2023['temp_5m'].values[0] if not ref_2023.empty else 99.0
+    if is_future_date:
+        st.info("🔮 **未来の日付が選択されているため、判定は行えません。**")
+    elif is_off_season:
+        st.info("❄️ **現在の期間はへい死リスクが低いため、観測休止期間（オフシーズン）です。**")
+    else:
+        ref_2025 = df_2025[df_2025['week_num'] == input_week]
+        ref_2024 = df_2024[df_2024['week_num'] == input_week] 
+        ref_2023 = df_2023[df_2023['week_num'] == input_week]
         
-        str_temp_2024 = f"{ref_temp_2024}℃" if ref_temp_2024 != 99.0 else "データなし"
-        str_temp_2023 = f"{ref_temp_2023}℃" if ref_temp_2023 != 99.0 else "データなし"
-        
-        score = 0
-        reasons = []
+        if not ref_2025.empty:
+            ref_temp_2025 = ref_2025['temp_5m'].values[0]
+            ref_temp_2024 = ref_2024['temp_5m'].values[0] if not ref_2024.empty else 99.0
+            ref_temp_2023 = ref_2023['temp_5m'].values[0] if not ref_2023.empty else 99.0
+            
+            str_temp_2024 = f"{ref_temp_2024}℃" if ref_temp_2024 != 99.0 else "データなし"
+            str_temp_2023 = f"{ref_temp_2023}℃" if ref_temp_2023 != 99.0 else "データなし"
+            
+            score = 0
+            reasons = []
 
-        # 判定A: 水温
-        if input_temp is not None:
-            is_over_2025 = (input_temp >= ref_temp_2025)
-            is_over_2024 = (input_temp >= ref_temp_2024)
+            # 判定A: 水温
+            if input_temp is not None:
+                is_over_2025 = (input_temp >= ref_temp_2025)
+                is_over_2024 = (input_temp >= ref_temp_2024)
 
-            if is_over_2025:
-                score += 2
-                reasons.append(f"水深5mの水温が2025年同期（{ref_temp_2025}℃）を上回るペースで推移しており、今後のさらなる水温上昇に警戒が必要です。")
-            elif is_over_2024:
-                score += 2
-                reasons.append(f"水深5mの水温が2024年同期（{str_temp_2024}）を上回るペースで推移しており、今後のさらなる水温上昇に警戒が必要です。")
-            elif input_temp >= 28.0:
-                score += 2
-                reasons.append(f"水温が28℃以上（{input_temp}℃）であり、極めて危険な熱ストレス圏内です。")
-            elif input_temp > ref_temp_2023 and ref_temp_2023 != 99.0:
-                score += 1
-                reasons.append(f"水深5mの水温が2023年同期（{str_temp_2023}）を上回って推移しており、やや高めの状態です。")
-            elif input_temp >= 27.0:
-                score += 1
-                reasons.append(f"水温が27℃以上（{input_temp}℃）であり、熱ストレスに警戒が必要です。")
+                if is_over_2025:
+                    score += 2
+                    reasons.append(f"水深5mの現在の水温（{input_temp}℃）が2025年同期（{ref_temp_2025}℃）を上回るペースで推移しており、今後のさらなる水温上昇に警戒が必要です。")
+                elif is_over_2024:
+                    score += 2
+                    reasons.append(f"水深5mの現在の水温（{input_temp}℃）が2024年同期（{str_temp_2024}）を上回るペースで推移しており、今後のさらなる水温上昇に警戒が必要です。")
+                elif input_temp >= 28.0:
+                    score += 2
+                    reasons.append(f"水深5mの水温が28℃以上（{input_temp}℃）であり、熱ストレス圏内です。")
+                elif input_temp > ref_temp_2023 and ref_temp_2023 != 99.0:
+                    score += 1
+                    reasons.append(f"水深5mの現在の水温（{input_temp}℃）が2023年同期（{str_temp_2023}）を上回って推移しており、やや高めの状態です。")
+                elif input_temp >= 27.0:
+                    score += 1
+                    reasons.append(f"水深5mの水温が27℃以上（{input_temp}℃）であり、熱ストレス圏内です。")
+                else:
+                    reasons.append(f"水深5mの水温は過去と比較して平年並み、または低い状態です。（{input_temp}℃）")
             else:
-                reasons.append(f"水深5mの水温は過去と比較して平年並み、または低い状態です。（{input_temp}℃）")
-        else:
-            reasons.append("水深5mの水温は「未観測」のため、判定から除外しています。")
+                reasons.append("水深5mの水温は「未観測」のため、判定から除外しています。")
 
-        # 判定B: 降水量
-        if input_precip is not None:
-            if input_precip == 0.0:
-                reasons.append("7月の降水量は時期前のため、リスク判定から除外しています。")
-            elif input_precip < 100:
-                score += 2
-                reasons.append(f"7月の降水量が100mm未満（{input_precip}mm）の少雨であり、高塩分・貧栄養の深刻なリスクがあります。")
-            elif input_precip < 200:
-                score += 1
-                reasons.append(f"7月の降水量が200mm未満（{input_precip}mm）であり、環境悪化の兆候に注意が必要です。")
+            # 判定B: 降水量
+            if input_precip is not None:
+                if input_precip == 0.0:
+                    reasons.append("7月の降水量は時期前のため、リスク判定から除外しています。")
+                elif input_precip < 100:
+                    score += 2
+                    reasons.append(f"7月の降水量が100mm未満（{input_precip}mm）の少雨であり、高塩分・貧栄養のリスクがあります。")
+                elif input_precip < 200:
+                    score += 1
+                    reasons.append(f"7月の降水量が200mm未満（{input_precip}mm）であり、高塩分・貧栄養の兆候に注意が必要です。")
+                else:
+                    reasons.append(f"7月の降水量は200mm以上（{input_precip}mm）あり、十分な雨が降っています。")
             else:
-                reasons.append(f"7月の降水量は200mm以上（{input_precip}mm）あり、十分な雨が降っています。")
-        else:
-            reasons.append("7月の降水量は「未観測」のため、判定から除外しています。")
+                reasons.append("7月の降水量は「未観測」のため、判定から除外しています。")
 
-        # 判定C: クロロフィル
-        if input_chl is not None:
-            if input_chl < 1.0:
-                score += 2
-                reasons.append(f"クロロフィルが非常に低く（{input_chl} µg/L）、牡蠣が餌不足に陥っています。")
-            elif input_chl < 2.0:
-                score += 1
-                reasons.append(f"クロロフィルがやや低め（{input_chl} µg/L）で、牡蠣が餌不足に陥るリスクがあります。")
+            # 判定C: クロロフィル
+            if input_chl is not None:
+                if input_chl < 1.0:
+                    score += 2
+                    reasons.append(f"クロロフィルが非常に低く（{input_chl} µg/L）、牡蠣が餌不足に陥っています。")
+                elif input_chl < 2.0:
+                    score += 1
+                    reasons.append(f"クロロフィルがやや低め（{input_chl} µg/L）で、牡蠣が餌不足に陥るリスクがあります。")
+                else:
+                    reasons.append(f"クロロフィルは十分（{input_chl} µg/L）あり、牡蠣の餌環境は良好です。")
             else:
-                reasons.append(f"クロロフィルは十分（{input_chl} µg/L）あり、牡蠣の餌環境は良好です。")
-        else:
-            reasons.append("水深5mのクロロフィルは「未観測」のため、判定から除外しています。")
+                reasons.append("水深5mのクロロフィルは「未観測」のため、判定から除外しています。")
 
-        # 判定D: 溶存酸素の低下リスク
-        if input_do_5m is not None:
-            if input_do_5m < 4.0:
-                score += 5
-                reasons.append(f"水深5mの溶存酸素が非常に低く（{input_do_5m} mg/L）、貧酸素による致命的なダメージを受けるリスクがあります。")
-            elif input_do_5m < 5.0:
-                score += 1
-                reasons.append(f"水深5mの溶存酸素が低下しており（{input_do_5m} mg/L）、環境ストレスがかかりやすい状態です。")
+            # 判定D: 溶存酸素の低下リスク
+            if input_do_5m is not None:
+                if input_do_5m < 4.0:
+                    score += 5
+                    reasons.append(f"水深5mの溶存酸素が非常に低く（{input_do_5m} mg/L）、貧酸素による致命的なダメージを受けるリスクがあります。")
+                elif input_do_5m < 5.0:
+                    score += 1
+                    reasons.append(f"水深5mの溶存酸素が低下しており（{input_do_5m} mg/L）、環境ストレスがかかりやすい状態です。")
+                else:
+                    reasons.append(f"溶存酸素は十分（{input_do_5m} mg/L）であり、貧酸素の危険性は低いです。")
             else:
-                reasons.append(f"溶存酸素は十分（{input_do_5m} mg/L）であり、貧酸素の危険性は低いです。")
-        else:
-            reasons.append("水深5mの溶存酸素は「未観測」のため、判定から除外しています。")
+                reasons.append("水深5mの溶存酸素は「未観測」のため、判定から除外しています。")
 
-        # 判定E: 塩分の上昇リスク
-        if input_sal_5m is not None:
-            if input_sal_5m >= 33.0:
-                score += 1
-                reasons.append(f"塩分が33 PSU以上（{input_sal_5m} PSU）と高くなっており、環境ストレスの要因となる可能性があります。")
+            # 判定E: 塩分の上昇リスク
+            if input_sal_5m is not None:
+                if input_sal_5m >= 33.0:
+                    score += 1
+                    reasons.append(f"塩分が33 PSU以上（{input_sal_5m} PSU）と高くなっており、環境ストレスの要因となる可能性があります。")
+                else:
+                    reasons.append(f"塩分は正常な範囲内（{input_sal_5m} PSU）です。")
             else:
-                reasons.append(f"塩分は正常な範囲内（{input_sal_5m} PSU）です。")
-        else:
-            reasons.append("水深5mの塩分は「未観測」のため、判定から除外しています。")
-        
-        valid_inputs = [x for x in [input_temp, input_precip, input_chl, input_do_5m, input_sal_5m] if x is not None]
-        
-        if len(valid_inputs) == 0:
-            st.info("### ⚪ 【判定不能】データがありません")
-            st.write("**判定：すべての必須項目が未観測のため、リスク判定が行えません。**")
-            for r in reasons:
-                st.write(f"- {r}")
+                reasons.append("水深5mの塩分は「未観測」のため、判定から除外しています。")
+            
+            missing_items = []
+            if input_temp is None: missing_items.append("水温")
+            if input_chl is None: missing_items.append("クロロフィル")
+            if input_do_5m is None: missing_items.append("溶存酸素")
+            if input_sal_5m is None: missing_items.append("塩分")
+            
+            if input_precip is None and selected_year != 2026:
+                missing_items.append("降水量")
+            
+            if len(missing_items) > 0:
+                st.info("### ⚪ 【判定保留】未計測項目あり")
+                st.write(f"**判定：未観測の項目（{', '.join(missing_items)}）があるため、全体のリスク判定は保留としています。**")
+                for r in reasons:
+                    st.write(f"- {r}")
+                    
+            elif score >= 5:
+                st.error(f"### 🔴 【危険：赤】リスクスコア: {score}")
+                st.caption("スコア凡例：🔴危険: 5点以上 🟡警戒: 3〜4点 🟢安全: 2点以下")
+                st.write("**判定：大量へい死の危険性が極めて高い状態です。**")
+                for r in reasons:
+                    st.write(f"- {r}")
                 
-        elif score >= 5:
-            st.error(f"### 🔴 【危険：赤】リスクスコア: {score}")
-            st.caption("スコア凡例：🔴危険: 5点以上 🟡警戒: 3〜4点 🟢安全: 2点以下")
-            st.write("**判定：大量へい死の危険性が極めて高い状態です。**")
-            for r in reasons:
-                st.write(f"- {r}")
-            
-        elif score >= 3:
-            st.warning(f"### 🟡 【警戒：黄】リスクスコア: {score}")
-            st.caption("スコア凡例：🔴危険: 5点以上 🟡警戒: 3〜4点 🟢安全: 2点以下")
-            st.write("**判定：環境が悪化しつつあります。今後の予報に注意してください。**")
-            for r in reasons:
-                st.write(f"- {r}")
-            
-        else:
-            st.success(f"### 🟢 【安全：緑】リスクスコア: {score}") 
-            st.caption("スコア凡例：🔴危険: 5点以上 🟡警戒: 3〜4点 🟢安全: 2点以下")
-            st.write("**判定：現在のところ平年並み、または安全な環境です。**")
-            for r in reasons:
-                st.write(f"- {r}")
+            elif score >= 3:
+                st.warning(f"### 🟡 【警戒：黄】リスクスコア: {score}")
+                st.caption("スコア凡例：🔴危険: 5点以上 🟡警戒: 3〜4点 🟢安全: 2点以下")
+                st.write("**判定：環境が悪化しつつあります。今後の予報に注意してください。**")
+                for r in reasons:
+                    st.write(f"- {r}")
+                
+            else:
+                st.success(f"### 🟢 【安全：緑】リスクスコア: {score}") 
+                st.caption("スコア凡例：🔴危険: 5点以上 🟡警戒: 3〜4点 🟢安全: 2点以下")
+                st.write("**判定：現在のところ平年並み、または安全な環境です。**")
+                for r in reasons:
+                    st.write(f"- {r}")
 
         st.divider()
 
@@ -306,7 +319,7 @@ try:
             {
                 "section_title": "■ 気象データ",
                 "graphs": [
-                    {"title": "直近1週間の降水量", "icon": "🌧️", "col": "precip_mm_day", "y_label": "降水量 (mm)", "unit": " mm", "input": input_precip_day, "type": "line"},
+                    {"title": "週間降水量", "icon": "🌧️", "col": "precip_mm_day", "y_label": "降水量 (mm)", "unit": " mm", "input": input_precip_day, "type": "line"},
                     {"title": "7月の合計降水量", "icon": "🌧️", "col": "precip_sum_july", "y_label": "降水量 (mm)", "unit": " mm", "input": input_precip, "type": "bar"},
                 ]
             }
@@ -367,7 +380,8 @@ try:
                         yaxis_title=g['y_label'],
                         height=350,
                         showlegend=False, 
-                        margin=dict(l=10, r=10, t=30, b=10)
+                        # 💡 凡例を上部（タイトルとグラフの間）に配置してスマホでの重なりを防ぐ
+                        margin=dict(l=10, r=10, t=60, b=20)
                     )
 
                 else:
@@ -442,8 +456,10 @@ try:
                         yaxis_title=g['y_label'], 
                         hovermode="x unified",
                         height=350,
-                        legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
-                        margin=dict(l=10, r=10, t=30, b=10)
+                        # 💡 凡例をグラフ上部に配置
+                        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5),
+                        # 💡 スマホ表示用に上下の余白を少し広げて重なりを防止
+                        margin=dict(l=10, r=10, t=60, b=20)
                     )
 
                 st.plotly_chart(fig, use_container_width=True)
