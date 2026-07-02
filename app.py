@@ -7,7 +7,7 @@ import pydeck as pdk
 st.set_page_config(page_title="安芸津牡蠣養殖リスク予測", layout="wide")
 
 # 1. データの読み込み
-@st.cache_data
+@st.cache_data(ttl=3600)  
 def load_data():
     df = pd.read_csv('oyster_akitsu.csv')
     df['date'] = pd.to_datetime(df['date'])
