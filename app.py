@@ -177,18 +177,18 @@ try:
         else:
             reasons.append("水深5mの水温は「未観測」のため、判定から除外しています。")
 
-        # 判定B: 降水量
+        # 判定B: 降水量 (💡 修正箇所)
         if input_precip is not None:
             if input_precip == 0.0:
                 reasons.append("7月の降水量は時期前のため、リスク判定から除外しています。")
             elif input_precip < 100:
-                score += 2
-                reasons.append(f"7月の降水量が100mm未満（{input_precip}mm）の少雨であり、高塩分・貧栄養のリスクがあります。")
+                score += 2  # 100未満で+2点
+                reasons.append(f"7月の降水量が100mm未満（{input_precip}mm）の少雨であり、高塩分・貧栄養の深刻なリスクがあります。")
             elif input_precip < 200:
-                score += 1
+                score += 1  # 100以上200未満で+1点
                 reasons.append(f"7月の降水量が200mm未満（{input_precip}mm）であり、高塩分・貧栄養の兆候に注意が必要です。")
             else:
-                reasons.append(f"7月の降水量は200mm以上（{input_precip}mm）あり、十分な雨が降っています。")
+                reasons.append(f"7月の降水量は200mm以上（{input_precip}mm）あり、十分な雨が降っています。") # 200以上で加点なし
         else:
             reasons.append("7月の降水量は「未観測」のため、判定から除外しています。")
 
@@ -343,7 +343,10 @@ try:
         for g in section["graphs"]:
             st.markdown(f"#### {g['icon']} {g['title']}")
             
-            # 💡 グラフの注意書きを「25℃以上」に変更
+            # 💡 週間降水量グラフのキャプション追加
+            if g['col'] == 'precip_mm_day':
+                st.caption("※ 降水量の観測地点：竹原")
+            
             if g['col'] in ['temp_0m', 'temp_5m']:
                 st.caption("※ 背景のうす赤色の範囲は、25℃以上の値を示しています。")
                 
@@ -362,7 +365,8 @@ try:
                         valid_data = year_data[g['col']].dropna()
                         if not valid_data.empty:
                             years_list.append(f"{int(year)}年")
-                            values_list.append(valid_data.values[0])
+                            # 💡 修正箇所：その年の最大値を取得する
+                            values_list.append(valid_data.max())
                             colors_list.append(color_map.get(year, "gray"))
                 
                 fig.add_trace(go.Bar(
@@ -409,7 +413,6 @@ try:
                             connectgaps=True 
                         ))
                 
-                # 💡 2023年の線に依存せず、グラフ全体で25℃以上の領域を赤く塗りつぶす
                 if g['col'] in ['temp_0m', 'temp_5m']:
                     max_col_val = df[g['col']].max(skipna=True)
                     input_val = g['input'] if g['input'] is not None else 0.0
