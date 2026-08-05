@@ -177,13 +177,14 @@ try:
         else:
             reasons.append("水深5mの水温は「未観測」のため、判定から除外しています。")
 
-        # 判定B: 降水量 (💡 修正箇所)
+        # 判定B: 降水量
         if input_precip is not None:
             if input_precip == 0.0:
                 reasons.append("7月の降水量は時期前のため、リスク判定から除外しています。")
             elif input_precip < 100:
                 score += 2  # 100未満で+2点
-                reasons.append(f"7月の降水量が100mm未満（{input_precip}mm）の少雨であり、高塩分・貧栄養の深刻なリスクがあります。")
+                # 💡 「深刻な」という言葉を削除しました
+                reasons.append(f"7月の降水量が100mm未満（{input_precip}mm）の少雨であり、高塩分・貧栄養のリスクがあります。")
             elif input_precip < 200:
                 score += 1  # 100以上200未満で+1点
                 reasons.append(f"7月の降水量が200mm未満（{input_precip}mm）であり、高塩分・貧栄養の兆候に注意が必要です。")
@@ -365,7 +366,7 @@ try:
                         valid_data = year_data[g['col']].dropna()
                         if not valid_data.empty:
                             years_list.append(f"{int(year)}年")
-                            # 💡 修正箇所：その年の最大値を取得する
+                            # 💡 その年の最大値を取得する
                             values_list.append(valid_data.max())
                             colors_list.append(color_map.get(year, "gray"))
                 
