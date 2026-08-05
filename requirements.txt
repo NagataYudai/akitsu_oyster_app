@@ -1,5 +1,4 @@
-streamlit
+streamlit>=1.40.0
 pandas
 plotly
 pydeck
-starlette==0.39.2
