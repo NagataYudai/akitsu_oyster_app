@@ -152,17 +152,25 @@ try:
         score = 0
         reasons = []
 
-        # 判定A: 水温
+        # 💡 9月以降（秋口）と8月以前で水温メッセージを自動切替
+        if input_date.month >= 9:
+            trend_str = "上回って推移しており"
+            alert_str = "高水温による熱ストレスの蓄積に警戒が必要です。"
+        else:
+            trend_str = "上回るペースで推移しており"
+            alert_str = "今後のさらなる水温上昇に警戒が必要です。"
+
+        # ① 水温
         if input_temp is not None:
             is_over_2025 = (input_temp >= ref_temp_2025) and (ref_temp_2025 != 99.0)
             is_over_2024 = (input_temp >= ref_temp_2024) and (ref_temp_2024 != 99.0)
 
             if is_over_2025:
                 score += 2
-                reasons.append(f"水深5mの現在の水温（{input_temp}℃）が2025年同期（{str_temp_2025}）を上回るペースで推移しており、今後のさらなる水温上昇に警戒が必要です。")
+                reasons.append(f"水深5mの現在の水温（{input_temp}℃）が2025年同期（{str_temp_2025}）を{trend_str}、{alert_str}")
             elif is_over_2024:
                 score += 2
-                reasons.append(f"水深5mの現在の水温（{input_temp}℃）が2024年同期（{str_temp_2024}）を上回るペースで推移しており、今後のさらなる水温上昇に警戒が必要です。")
+                reasons.append(f"水深5mの現在の水温（{input_temp}℃）が2024年同期（{str_temp_2024}）を{trend_str}、{alert_str}")
             elif input_temp >= 28.0:
                 score += 2
                 reasons.append(f"水深5mの水温が28℃以上（{input_temp}℃）であり、熱ストレス圏内です。")
@@ -177,7 +185,43 @@ try:
         else:
             reasons.append("水深5mの水温は「未観測」のため、判定から除外しています。")
 
-        # 判定B: 降水量
+        # ② 塩分の上昇リスク
+        if input_sal_5m is not None:
+            if input_sal_5m >= 33.0:
+                score += 1
+                reasons.append(f"塩分が33 PSU以上（{input_sal_5m} PSU）と高くなっており、環境ストレスの要因となる可能性があります。")
+            else:
+                reasons.append(f"塩分は正常な範囲内（{input_sal_5m} PSU）です。")
+        else:
+            reasons.append("水深5mの塩分は「未観測」のため、判定から除外しています。")
+
+        # ③ クロロフィル
+        if input_chl is not None:
+            if input_chl < 1.0:
+                score += 2
+                reasons.append(f"クロロフィルが非常に低く（{input_chl} µg/L）、牡蠣が餌不足に陥っています。")
+            elif input_chl < 2.0:
+                score += 1
+                reasons.append(f"クロロフィルがやや低め（{input_chl} µg/L）で、牡蠣が餌不足に陥るリスクがあります。")
+            else:
+                reasons.append(f"クロロフィルは十分（{input_chl} µg/L）あり、牡蠣の餌環境は良好です。")
+        else:
+            reasons.append("水深5mのクロロフィルは「未観測」のため、判定から除外しています。")
+
+        # ④ 溶存酸素の低下リスク
+        if input_do_5m is not None:
+            if input_do_5m < 4.0:
+                score += 5
+                reasons.append(f"水深5mの溶存酸素が非常に低く（{input_do_5m} mg/L）、貧酸素による致命的なダメージを受けるリスクがあります。")
+            elif input_do_5m < 5.0:
+                score += 1
+                reasons.append(f"水深5mの溶存酸素が低下しており（{input_do_5m} mg/L）、環境ストレスがかかりやすい状態です。")
+            else:
+                reasons.append(f"溶存酸素は十分（{input_do_5m} mg/L）であり、貧酸素の危険性は低いです。")
+        else:
+            reasons.append("水深5mの溶存酸素は「未観測」のため、判定から除外しています。")
+
+        # ⑤ 7月降水量
         if input_precip is not None:
             if input_precip == 0.0:
                 reasons.append("7月の降水量は時期前のため、リスク判定から除外しています。")
@@ -191,49 +235,12 @@ try:
                 reasons.append(f"7月の降水量は200mm以上（{input_precip}mm）あり、十分な雨が降っています。")
         else:
             reasons.append("7月の降水量は「未観測」のため、判定から除外しています。")
-
-        # 判定C: クロロフィル
-        if input_chl is not None:
-            if input_chl < 1.0:
-                score += 2
-                reasons.append(f"クロロフィルが非常に低く（{input_chl} µg/L）、牡蠣が餌不足に陥っています。")
-            elif input_chl < 2.0:
-                score += 1
-                reasons.append(f"クロロフィルがやや低め（{input_chl} µg/L）で、牡蠣が餌不足に陥るリスクがあります。")
-            else:
-                reasons.append(f"クロロフィルは十分（{input_chl} µg/L）あり、牡蠣の餌環境は良好です。")
-        else:
-            reasons.append("水深5mのクロロフィルは「未観測」のため、判定から除外しています。")
-
-        # 判定D: 溶存酸素の低下リスク
-        if input_do_5m is not None:
-            if input_do_5m < 4.0:
-                score += 5
-                reasons.append(f"水深5mの溶存酸素が非常に低く（{input_do_5m} mg/L）、貧酸素による致命的なダメージを受けるリスクがあります。")
-            elif input_do_5m < 5.0:
-                score += 1
-                reasons.append(f"水深5mの溶存酸素が低下しており（{input_do_5m} mg/L）、環境ストレスがかかりやすい状態です。")
-            else:
-                reasons.append(f"溶存酸素は十分（{input_do_5m} mg/L）であり、貧酸素の危険性は低いです。")
-        else:
-            reasons.append("水深5mの溶存酸素は「未観測」のため、判定から除外しています。")
-
-        # 判定E: 塩分の上昇リスク
-        if input_sal_5m is not None:
-            if input_sal_5m >= 33.0:
-                score += 1
-                reasons.append(f"塩分が33 PSU以上（{input_sal_5m} PSU）と高くなっており、環境ストレスの要因となる可能性があります。")
-            else:
-                reasons.append(f"塩分は正常な範囲内（{input_sal_5m} PSU）です。")
-        else:
-            reasons.append("水深5mの塩分は「未観測」のため、判定から除外しています。")
         
         missing_items = []
         if input_temp is None: missing_items.append("水温")
+        if input_sal_5m is None: missing_items.append("塩分")
         if input_chl is None: missing_items.append("クロロフィル")
         if input_do_5m is None: missing_items.append("溶存酸素")
-        if input_sal_5m is None: missing_items.append("塩分")
-        
         if input_precip is None and selected_year != 2026:
             missing_items.append("降水量")
         
@@ -246,7 +253,6 @@ try:
         elif score >= 5:
             st.error(f"### 🔴 【危険：赤】リスクスコア: {score}")
             st.caption("スコア凡例：🔴危険: 5点以上 🟡警戒: 3〜4点 🟢安全: 2点以下")
-            # 💡 「極めて」を削除
             st.write("**判定：大量へい死の危険性が高い状態です。**")
             for r in reasons:
                 st.write(f"- {r}")
@@ -254,7 +260,11 @@ try:
         elif score >= 3:
             st.warning(f"### 🟡 【警戒：黄】リスクスコア: {score}")
             st.caption("スコア凡例：🔴危険: 5点以上 🟡警戒: 3〜4点 🟢安全: 2点以下")
-            st.write("**判定：環境が悪化しつつあります。今後の予報に注意してください。**")
+            # 💡 9月以降と8月以前で黄色判定のメッセージを自動切替
+            if input_date.month >= 9:
+                st.write("**判定：注意が必要な環境です。これまでの環境ストレスの蓄積が懸念されます。カキの様子に注意してください。**")
+            else:
+                st.write("**判定：環境が悪化しつつあります。今後の予報に注意してください。**")
             for r in reasons:
                 st.write(f"- {r}")
             
@@ -400,7 +410,8 @@ try:
                     
                     if g['col'] in year_data.columns:
                         line_color = color_map.get(year, "gray")
-                        line_width = 4 if year == selected_year else 2
+                        # 💡 すべての年度の線の太さを「2」に統一
+                        line_width = 2
                         
                         fig.add_trace(go.Scatter(
                             x=year_data['plot_date'], 
