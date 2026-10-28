@@ -73,7 +73,8 @@ try:
     else:
         target_data = pd.Series(dtype=float)
 
-    is_off_season = (input_week <= 6) or (input_week >= 44)
+    # 💡 10月中はリスク判定を行い、11月以降（または第6週以前）をオフシーズンに設定
+    is_off_season = (input_week <= 6) or (input_date.month >= 11)
 
     is_missing_week = False
     if not is_future_date and not is_off_season:
@@ -410,7 +411,6 @@ try:
                     
                     if g['col'] in year_data.columns:
                         line_color = color_map.get(year, "gray")
-                        # 💡 すべての年度の線の太さを「2」に統一
                         line_width = 2
                         
                         fig.add_trace(go.Scatter(
