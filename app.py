@@ -13,6 +13,11 @@ def load_data():
     csv_path = 'oyster_akitsu_2.csv' if os.path.exists('oyster_akitsu_2.csv') else 'oyster_akitsu.csv'
     df = pd.read_csv(csv_path)
     df['date'] = pd.to_datetime(df['date'])
+    # date列の年表記ゆれをyear列に合わせて正規化
+    df['date'] = df.apply(
+        lambda r: r['date'].replace(year=int(r['year'])) if pd.notnull(r['date']) and pd.notnull(r['year']) else r['date'],
+        axis=1
+    )
     df['plot_date'] = df['date'].apply(lambda d: d.replace(year=2024) if pd.notnull(d) else d)
     # 冬季（11月〜5月）グラフ用の日付列（11〜12月は2023年、1〜5月は2024年に配置）
     df['winter_plot_date'] = df['date'].apply(
@@ -40,7 +45,6 @@ try:
     # タイトルと更新日の表示
     st.title("🦪 安芸津牡蠣養殖 環境リスク監視システム")
     
-    # ① 表示メッセージの変更
     st.write("安芸津海域の最新海況データと過去の環境推移を比較・確認できます。")
     st.info(f"📢 **{latest_date.year}年{latest_date.month}月{latest_date.day}日 データ更新！**")
     
@@ -80,8 +84,8 @@ try:
     else:
         target_data = pd.Series(dtype=float)
 
-    # リスク判定期間（第23週〜第44週：6月〜10月）かどうかの判定
-    is_risk_season = 23 <= input_week <= 44
+    # 夏季（6月〜10月：第23〜44週）か冬季（11月〜5月：第1〜22週・第45〜53週）かの判定
+    is_risk_season = (23 <= input_week <= 44) and (6 <= input_date.month <= 10)
 
     is_missing_week = False
     if not is_future_date:
@@ -152,14 +156,14 @@ try:
     star_year_winter = 2023 if input_date.month >= 11 else 2024
     star_date_winter = pd.to_datetime(f"{star_year_winter}-{input_date.month:02d}-{input_date.day:02d}")
 
-    # 3. メイン表示エリア（期間によって「リスク判定」と「現在の海況」を切り替え）
+    # 3. メイン表示エリア（夏季は「へい死リスク」、冬季は「現在の海況」に切り替え）
     if is_future_date:
         st.subheader("⚠️ リスク判定結果 / 現在の海況")
         st.info("🔮 **未来の日付が選択されているため、データの表示・判定は行えません。**")
 
     elif is_risk_season:
         # =========================================================
-        # 【A】6月〜10月（第23週〜第44週）：へい死リスク判定モード
+        # 【夏季：6月〜10月】へい死リスク判定ページ
         # =========================================================
         st.subheader("⚠️ リスク判定結果")
         
@@ -289,9 +293,8 @@ try:
 
     else:
         # =========================================================
-        # 【B】11月〜翌年5月（第1〜22週・第45〜53週）：現在の海況モード
+        # 【冬季：11月〜5月】現在の海況ページ（各ボックス内に評価文言を統合）
         # =========================================================
-        # ② 見出しから「サマリー（水深5m）」を削除し、期間の表記を「11月〜翌年5月は」に変更
         st.subheader("🌊 現在の海況")
         st.caption("※ 11月〜翌年5月はへい死リスクが低いため、リスクスコアの判定は休止し、最新の海況を表示しています。")
 
@@ -305,83 +308,79 @@ try:
                 return f"{diff:+.2f} {unit}（先週比）"
             return None
 
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric(
-                label="🌡️ 水深5m 水温",
-                value=f"{input_temp:.2f} ℃" if input_temp is not None else "未観測",
-                delta=calc_delta_str(input_temp, 'temp_5m', '℃'),
-                delta_color="off"
-            )
-        with col2:
-            st.metric(
-                label="💠 水深5m 塩分",
-                value=f"{input_sal_5m:.2f} PSU" if input_sal_5m is not None else "未観測",
-                delta=calc_delta_str(input_sal_5m, 'sal_5m', 'PSU'),
-                delta_color="off"
-            )
-        with col3:
-            st.metric(
-                label="🟢 水深5m クロロフィル（餌）",
-                value=f"{input_chl:.2f} µg/L" if input_chl is not None else "未観測",
-                delta=calc_delta_str(input_chl, 'chl_5m', 'µg/L'),
-                delta_color="off"
-            )
-        with col4:
-            st.metric(
-                label="⚪ 水深5m 溶存酸素",
-                value=f"{input_do_5m:.2f} mg/L" if input_do_5m is not None else "未観測",
-                delta=calc_delta_str(input_do_5m, 'do_5m', 'mg/L'),
-                delta_color="off"
-            )
-
-        # ③ 「現在の状況」のメッセージ（水温は現在値表示、塩分〜溶存酸素は6〜10月と同一文言、降水量は非表示）
-        summary_comments = []
-
-        # 水温
+        # 各項目の評価メッセージを作成
         if input_temp is not None:
-            summary_comments.append(f"水深5mの現在の水温は {input_temp}℃ です。")
+            temp_eval = f"水深5mの現在の水温は {input_temp}℃ です。"
         else:
-            summary_comments.append("水深5mの水温は「未観測」です。")
+            temp_eval = "水深5mの水温は「未観測」です。"
 
-        # 塩分（6〜10月と同じメッセージ）
         if input_sal_5m is not None:
             if input_sal_5m >= 33.0:
-                summary_comments.append(f"塩分が33 PSU以上（{input_sal_5m} PSU）と高くなっており、環境ストレスの要因となる可能性があります。")
+                sal_eval = f"塩分が33 PSU以上（{input_sal_5m} PSU）と高くなっており、環境ストレスの要因となる可能性があります。"
             else:
-                summary_comments.append(f"塩分は正常な範囲内（{input_sal_5m} PSU）です。")
+                sal_eval = f"塩分は正常な範囲内（{input_sal_5m} PSU）です。"
         else:
-            summary_comments.append("水深5mの塩分は「未観測」です。")
+            sal_eval = "水深5mの塩分は「未観測」です。"
 
-        # クロロフィル（6〜10月と同じメッセージ）
         if input_chl is not None:
             if input_chl < 1.0:
-                summary_comments.append(f"クロロフィルが非常に低く（{input_chl} µg/L）、牡蠣が餌不足に陥っています。")
+                chl_eval = f"クロロフィルが非常に低く（{input_chl} µg/L）、牡蠣が餌不足に陥っています。"
             elif input_chl < 2.0:
-                summary_comments.append(f"クロロフィルがやや低め（{input_chl} µg/L）で、牡蠣が餌不足に陥るリスクがあります。")
+                chl_eval = f"クロロフィルがやや低め（{input_chl} µg/L）で、牡蠣が餌不足に陥るリスクがあります。"
             else:
-                summary_comments.append(f"クロロフィルは十分（{input_chl} µg/L）あり、牡蠣の餌環境は良好です。")
+                chl_eval = f"クロロフィルは十分（{input_chl} µg/L）あり、牡蠣の餌環境は良好です。"
         else:
-            summary_comments.append("水深5mのクロロフィルは「未観測」です。")
+            chl_eval = "水深5mのクロロフィルは「未観測」です。"
 
-        # 溶存酸素（6〜10月と同じメッセージ）
         if input_do_5m is not None:
             if input_do_5m < 4.0:
-                summary_comments.append(f"水深5mの溶存酸素が非常に低く（{input_do_5m} mg/L）、貧酸素による致命的なダメージを受けるリスクがあります。")
+                do_eval = f"水深5mの溶存酸素が非常に低く（{input_do_5m} mg/L）、貧酸素による致命的なダメージを受けるリスクがあります。"
             elif input_do_5m < 5.0:
-                summary_comments.append(f"水深5mの溶存酸素が低下しており（{input_do_5m} mg/L）、環境ストレスがかかりやすい状態です。")
+                do_eval = f"水深5mの溶存酸素が低下しており（{input_do_5m} mg/L）、環境ストレスがかかりやすい状態です。"
             else:
-                summary_comments.append(f"溶存酸素は十分（{input_do_5m} mg/L）であり、貧酸素の危険性は低いです。")
+                do_eval = f"溶存酸素は十分（{input_do_5m} mg/L）であり、貧酸素の危険性は低いです。"
         else:
-            summary_comments.append("水深5mの溶存酸素は「未観測」です。")
+            do_eval = "水深5mの溶存酸素は「未観測」です。"
 
-        st.markdown("##### 📋 現在の状況")
-        for comment in summary_comments:
-            st.write(f"- {comment}")
+        # 4列のボックス内に数値（水温のみ先週比つき）と具体的な評価を表示
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            with st.container(border=True):
+                st.metric(
+                    label="🌡️ 水深5m 水温",
+                    value=f"{input_temp:.2f} ℃" if input_temp is not None else "未観測",
+                    delta=calc_delta_str(input_temp, 'temp_5m', '℃'),
+                    delta_color="off"
+                )
+                st.write(temp_eval)
+        with col2:
+            with st.container(border=True):
+                st.metric(
+                    label="💠 水深5m 塩分",
+                    value=f"{input_sal_5m:.2f} PSU" if input_sal_5m is not None else "未観測"
+                )
+                st.write(sal_eval)
+        with col3:
+            with st.container(border=True):
+                st.metric(
+                    label="🟢 水深5m クロロフィル（餌）",
+                    value=f"{input_chl:.2f} µg/L" if input_chl is not None else "未観測"
+                )
+                st.write(chl_eval)
+        with col4:
+            with st.container(border=True):
+                st.metric(
+                    label="⚪ 水深5m 溶存酸素",
+                    value=f"{input_do_5m:.2f} mg/L" if input_do_5m is not None else "未観測"
+                )
+                st.write(do_eval)
 
-    # 4. 可視化（グラフ表示の自動化）
+    # 4. 可視化（夏季は6〜10月、冬季は11〜5月のグラフに切り替え）
     st.divider()
-    st.header("📊 環境データの推移比較")
+    if is_risk_season:
+        st.header("📊 環境データの推移比較（夏季：6月〜10月）")
+    else:
+        st.header("📊 環境データの推移比較（冬季：11月〜5月）")
     
     color_map = {2026: "orange", 2025: "red", 2024: "yellowgreen", 2023: "cyan"}
     
@@ -415,10 +414,6 @@ try:
         }
     ]
 
-    # 通年用の目盛り（1月〜12月）
-    tickvals_full = [f"2024-{m:02d}-01" for m in range(1, 13)]
-    ticktext_full = [f"{m}月" for m in range(1, 13)]
-
     # 冬季（11月〜5月）用の目盛り
     tickvals_winter = ["2023-11-01", "2023-12-01", "2024-01-01", "2024-02-01", "2024-03-01", "2024-04-01", "2024-05-01"]
     ticktext_winter = ["11月", "12月", "1月", "2月", "3月", "4月", "5月"]
@@ -426,6 +421,14 @@ try:
     # 夏季（6月〜10月）用の目盛り
     tickvals_summer = [f"2024-{m:02d}-01" for m in range(6, 11)]
     ticktext_summer = [f"{m}月" for m in range(6, 11)]
+
+    # 積算水温・冬季（2月〜5月）用の目盛り
+    tickvals_sum_winter = [f"2024-{m:02d}-01" for m in range(2, 6)]
+    ticktext_sum_winter = [f"{m}月" for m in range(2, 6)]
+
+    # 積算水温・夏季（2月〜10月）用の目盛り
+    tickvals_sum_summer = [f"2024-{m:02d}-01" for m in range(2, 11)]
+    ticktext_sum_summer = [f"{m}月" for m in range(2, 11)]
     
     star_marker = dict(size=18, color="#FFD700", symbol="star", line=dict(color="black", width=1))
 
@@ -439,7 +442,11 @@ try:
                 st.caption("※ 降水量の観測地点：竹原")
             
             graph_type = g.get("type", "line") 
+            col_name = g['col']
             
+            # ---------------------------------------------------------
+            # A. 棒グラフ（7月の合計降水量）
+            # ---------------------------------------------------------
             if graph_type == "bar":
                 fig = go.Figure()
                 years_list = []
@@ -448,8 +455,8 @@ try:
                 
                 for year in sorted(df['year'].unique()):
                     year_data = df[df['year'] == year]
-                    if g['col'] in year_data.columns:
-                        valid_data = year_data[g['col']].dropna()
+                    if col_name in year_data.columns:
+                        valid_data = year_data[col_name].dropna()
                         if not valid_data.empty:
                             years_list.append(f"{int(year)}年")
                             values_list.append(valid_data.max())
@@ -483,116 +490,42 @@ try:
                 st.plotly_chart(fig, use_container_width=True)
                 st.divider()
 
-            # ⑤ 水温のグラフは1段目に冬季（11月〜5月）、2段目に夏季（6月〜10月）に分けて描画
-            elif g['col'] in ['temp_0m', 'temp_5m']:
-                # ---------------------------------------------------------
-                # 1段目：冬季（11月〜5月）
-                # ---------------------------------------------------------
-                st.markdown("**【冬季：11月〜5月】**")
-                fig_winter = go.Figure()
+            # ---------------------------------------------------------
+            # B. 積算水温グラフ（冬季は2月〜5月、夏季は2月〜10月）
+            # ---------------------------------------------------------
+            elif col_name in ['temp_sum_0m', 'temp_sum_5m']:
+                fig = go.Figure()
 
+                if is_risk_season:
+                    # 夏季モード：2月〜10月
+                    target_months = list(range(2, 11))
+                    x_range = ["2024-02-01", "2024-10-31"]
+                    t_vals = tickvals_sum_summer
+                    t_text = ticktext_sum_summer
+                else:
+                    # 冬季モード：2月〜5月
+                    target_months = [2, 3, 4, 5]
+                    x_range = ["2024-02-01", "2024-05-31"]
+                    t_vals = tickvals_sum_winter
+                    t_text = ticktext_sum_winter
+
+                df_sum_sub = df[df['date'].dt.month.isin(target_months)]
                 for year in sorted(df['year'].unique()):
-                    year_data = df[df['year'] == year]
-                    if g['col'] in year_data.columns:
+                    year_data = df_sum_sub[df_sum_sub['year'] == year].sort_values('plot_date')
+                    if col_name in year_data.columns:
                         line_color = color_map.get(year, "gray")
-                        line_width = 2
-
-                        nov_dec = year_data[year_data['date'].dt.month >= 11].dropna(subset=[g['col']]).sort_values('winter_plot_date')
-                        jan_may = year_data[year_data['date'].dt.month <= 5].dropna(subset=[g['col']]).sort_values('winter_plot_date')
-
-                        # 12月のデータがまだない進行中の年は、11月の最新点と1月の点が直線で結ばれないように分割
-                        has_dec_data = not nov_dec[nov_dec['date'].dt.month == 12].empty
-                        if has_dec_data or nov_dec.empty or jan_may.empty:
-                            w_data = pd.concat([nov_dec, jan_may], ignore_index=True)
-                            fig_winter.add_trace(go.Scatter(
-                                x=w_data['winter_plot_date'],
-                                y=w_data[g['col']],
-                                name=f"{int(year)}年",
-                                line=dict(color=line_color, width=line_width),
-                                mode='lines+markers',
-                                hovertemplate=f'%{{y}}{g["unit"]}',
-                                connectgaps=True
-                            ))
-                        else:
-                            gap_row = pd.DataFrame({'winter_plot_date': [pd.to_datetime('2023-12-31')], g['col']: [None]})
-                            w_data = pd.concat([nov_dec, gap_row, jan_may], ignore_index=True)
-                            fig_winter.add_trace(go.Scatter(
-                                x=w_data['winter_plot_date'],
-                                y=w_data[g['col']],
-                                name=f"{int(year)}年",
-                                line=dict(color=line_color, width=line_width),
-                                mode='lines+markers',
-                                hovertemplate=f'%{{y}}{g["unit"]}',
-                                connectgaps=False
-                            ))
-
-                # 観測日が冬季（11月〜5月）の場合のみ星マーカーを表示
-                if g['input'] is not None and input_date.month in [11, 12, 1, 2, 3, 4, 5]:
-                    fig_winter.add_trace(go.Scatter(
-                        x=[star_date_winter],
-                        y=[g['input']],
-                        name="観測日の値",
-                        marker=star_marker,
-                        mode="markers",
-                        hovertemplate=f'観測日: %{{y}}{g["unit"]}'
-                    ))
-
-                fig_winter.update_layout(
-                    xaxis=dict(
-                        title="",
-                        tickmode="array",
-                        tickvals=tickvals_winter,
-                        ticktext=ticktext_winter,
-                        range=["2023-11-01", "2024-05-31"],
-                        hoverformat="%-m月%-d日"
-                    ),
-                    yaxis_title=g['y_label'],
-                    hovermode="x unified",
-                    height=350,
-                    legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5),
-                    margin=dict(l=10, r=10, t=60, b=20)
-                )
-                st.plotly_chart(fig_winter, use_container_width=True)
-
-                # ---------------------------------------------------------
-                # 2段目：夏季（6月〜10月）
-                # ---------------------------------------------------------
-                st.markdown("**【夏季：6月〜10月】**")
-                st.caption("※ 背景のうす赤色の範囲は、25℃以上の値を示しています。")
-                fig_summer = go.Figure()
-
-                df_summer_all = df[df['date'].dt.month.isin([6, 7, 8, 9, 10])]
-                for year in sorted(df['year'].unique()):
-                    year_data = df_summer_all[df_summer_all['year'] == year].sort_values('plot_date')
-                    if g['col'] in year_data.columns:
-                        line_color = color_map.get(year, "gray")
-                        line_width = 2
-
-                        fig_summer.add_trace(go.Scatter(
+                        fig.add_trace(go.Scatter(
                             x=year_data['plot_date'],
-                            y=year_data[g['col']],
+                            y=year_data[col_name],
                             name=f"{int(year)}年",
-                            line=dict(color=line_color, width=line_width),
+                            line=dict(color=line_color, width=2),
                             mode='lines+markers',
                             hovertemplate=f'%{{y}}{g["unit"]}',
                             connectgaps=True
                         ))
 
-                max_col_val = df_summer_all[g['col']].max(skipna=True)
-                input_val = g['input'] if (g['input'] is not None and input_date.month in [6, 7, 8, 9, 10]) else 0.0
-                max_y = max(max_col_val if pd.notnull(max_col_val) else 30.0, input_val) + 2.0
-
-                fig_summer.add_hrect(
-                    y0=25.0,
-                    y1=max_y,
-                    fillcolor='rgba(255, 0, 0, 0.1)',
-                    line_width=0,
-                    layer='below'
-                )
-
-                # 観測日が夏季（6月〜10月）の場合のみ星マーカーを表示
-                if g['input'] is not None and input_date.month in [6, 7, 8, 9, 10]:
-                    fig_summer.add_trace(go.Scatter(
+                if g['input'] is not None and input_date.month in target_months:
+                    fig.add_trace(go.Scatter(
                         x=[star_date],
                         y=[g['input']],
                         name="観測日の値",
@@ -601,13 +534,16 @@ try:
                         hovertemplate=f'観測日: %{{y}}{g["unit"]}'
                     ))
 
-                fig_summer.update_layout(
+                fig.add_hline(y=600, line_dash="dash", line_color="gray", annotation_text="産卵開始 600℃", annotation_position="bottom right")
+                fig.add_hline(y=900, line_dash="dash", line_color="gray", annotation_text="採苗目安 900℃", annotation_position="bottom right")
+
+                fig.update_layout(
                     xaxis=dict(
                         title="",
                         tickmode="array",
-                        tickvals=tickvals_summer,
-                        ticktext=ticktext_summer,
-                        range=["2024-06-01", "2024-10-31"],
+                        tickvals=t_vals,
+                        ticktext=t_text,
+                        range=x_range,
                         hoverformat="%-m月%-d日"
                     ),
                     yaxis_title=g['y_label'],
@@ -616,52 +552,131 @@ try:
                     legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5),
                     margin=dict(l=10, r=10, t=60, b=20)
                 )
-                st.plotly_chart(fig_summer, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True)
                 st.divider()
 
+            # ---------------------------------------------------------
+            # C. その他の折れ線グラフ（夏季は6月〜10月、冬季は11月〜5月）
+            # ---------------------------------------------------------
             else:
-                # 水温以外の折れ線グラフ（通年：1月〜12月）
                 fig = go.Figure()
-                for year in sorted(df['year'].unique()):
-                    year_data = df[df['year'] == year].sort_values('plot_date')
-                    
-                    if g['col'] in year_data.columns:
-                        line_color = color_map.get(year, "gray")
-                        line_width = 2
-                        
-                        fig.add_trace(go.Scatter(
-                            x=year_data['plot_date'], 
-                            y=year_data[g['col']], 
-                            name=f"{int(year)}年", 
-                            line=dict(color=line_color, width=line_width),
-                            mode='lines+markers',
-                            hovertemplate=f'%{{y}}{g["unit"]}',
-                            connectgaps=True 
-                        ))
-                
-                if g['input'] is not None:
-                    fig.add_trace(go.Scatter(
-                        x=[star_date], 
-                        y=[g['input']], 
-                        name="観測日の値", 
-                        marker=star_marker, 
-                        mode="markers", 
-                        hovertemplate=f'観測日: %{{y}}{g["unit"]}'
-                    ))
 
-                col_name = g['col']
-                if col_name in ['temp_sum_0m', 'temp_sum_5m']:
-                    fig.add_hline(y=600, line_dash="dash", line_color="gray", annotation_text="産卵開始 600℃", annotation_position="bottom right")
-                    fig.add_hline(y=900, line_dash="dash", line_color="gray", annotation_text="採苗目安 900℃", annotation_position="bottom right")
-                
-                elif col_name in ['do_0m', 'do_5m']:
+                if is_risk_season:
+                    # 【夏季モード：6月〜10月】
+                    if col_name in ['temp_0m', 'temp_5m']:
+                        st.caption("※ 背景のうす赤色の範囲は、25℃以上の値を示しています。")
+
+                    df_summer_all = df[df['date'].dt.month.isin([6, 7, 8, 9, 10])]
+                    for year in sorted(df['year'].unique()):
+                        year_data = df_summer_all[df_summer_all['year'] == year].sort_values('plot_date')
+                        if col_name in year_data.columns:
+                            line_color = color_map.get(year, "gray")
+                            fig.add_trace(go.Scatter(
+                                x=year_data['plot_date'],
+                                y=year_data[col_name],
+                                name=f"{int(year)}年",
+                                line=dict(color=line_color, width=2),
+                                mode='lines+markers',
+                                hovertemplate=f'%{{y}}{g["unit"]}',
+                                connectgaps=True
+                            ))
+
+                    if col_name in ['temp_0m', 'temp_5m']:
+                        max_col_val = df_summer_all[col_name].max(skipna=True)
+                        input_val = g['input'] if g['input'] is not None else 0.0
+                        max_y = max(max_col_val if pd.notnull(max_col_val) else 30.0, input_val) + 2.0
+                        fig.add_hrect(
+                            y0=25.0,
+                            y1=max_y,
+                            fillcolor='rgba(255, 0, 0, 0.1)',
+                            line_width=0,
+                            layer='below'
+                        )
+
+                    if g['input'] is not None:
+                        fig.add_trace(go.Scatter(
+                            x=[star_date],
+                            y=[g['input']],
+                            name="観測日の値",
+                            marker=star_marker,
+                            mode="markers",
+                            hovertemplate=f'観測日: %{{y}}{g["unit"]}'
+                        ))
+
+                    x_range = ["2024-06-01", "2024-10-31"]
+                    t_vals = tickvals_summer
+                    t_text = ticktext_summer
+
+                else:
+                    # 【冬季モード：11月〜5月（案B）】
+                    for year in sorted(df['year'].unique()):
+                        year_data = df[df['year'] == year]
+                        if col_name in year_data.columns:
+                            line_color = color_map.get(year, "gray")
+                            legend_name = f"{int(year)}年"
+
+                            nov_dec = year_data[year_data['date'].dt.month >= 11].dropna(subset=[col_name]).sort_values('winter_plot_date')
+                            jan_may = year_data[year_data['date'].dt.month <= 5].dropna(subset=[col_name]).sort_values('winter_plot_date')
+
+                            if not nov_dec.empty and not jan_may.empty:
+                                gap_row = pd.DataFrame({'winter_plot_date': [pd.to_datetime('2023-12-31')], col_name: [None]})
+                                w_data = pd.concat([nov_dec, gap_row, jan_may], ignore_index=True)
+                            elif not nov_dec.empty:
+                                w_data = nov_dec
+                            else:
+                                w_data = jan_may
+
+                            if not w_data.empty:
+                                fig.add_trace(go.Scatter(
+                                    x=w_data['winter_plot_date'],
+                                    y=w_data[col_name],
+                                    name=legend_name,
+                                    legendgroup=legend_name,
+                                    line=dict(color=line_color, width=2),
+                                    mode='lines+markers',
+                                    hovertemplate=f'%{{y}}{g["unit"]}',
+                                    connectgaps=False
+                                ))
+
+                            # 前年（year - 1）の11〜12月最終データから当年（year）の1月初回データへ線を結ぶ
+                            prev_year_data = df[df['year'] == (year - 1)]
+                            if not prev_year_data.empty and not jan_may.empty:
+                                prev_nov_dec = prev_year_data[prev_year_data['date'].dt.month >= 11].dropna(subset=[col_name]).sort_values('winter_plot_date')
+                                if not prev_nov_dec.empty:
+                                    last_prev = prev_nov_dec.iloc[-1]
+                                    first_curr = jan_may.iloc[0]
+                                    fig.add_trace(go.Scatter(
+                                        x=[last_prev['winter_plot_date'], first_curr['winter_plot_date']],
+                                        y=[last_prev[col_name], first_curr[col_name]],
+                                        name=legend_name,
+                                        legendgroup=legend_name,
+                                        showlegend=False,
+                                        line=dict(color=line_color, width=2),
+                                        mode='lines',
+                                        hoverinfo='skip'
+                                    ))
+
+                    if g['input'] is not None:
+                        fig.add_trace(go.Scatter(
+                            x=[star_date_winter],
+                            y=[g['input']],
+                            name="観測日の値",
+                            marker=star_marker,
+                            mode="markers",
+                            hovertemplate=f'観測日: %{{y}}{g["unit"]}'
+                        ))
+
+                    x_range = ["2023-11-01", "2024-05-31"]
+                    t_vals = tickvals_winter
+                    t_text = ticktext_winter
+
+                # 共通の基準線（溶存酸素・クロロフィル・塩分）
+                if col_name in ['do_0m', 'do_5m']:
                     fig.add_hline(y=5, line_dash="dash", line_color="gray", annotation_text="酸素低下 5mg/L", annotation_position="bottom right")
                     fig.add_hline(y=4, line_dash="dash", line_color="gray", annotation_text="要警戒 4mg/L", annotation_position="bottom right")
-                
                 elif col_name in ['chl_0m', 'chl_5m']:
                     fig.add_hline(y=2, line_dash="dash", line_color="gray", annotation_text="餌料豊富 2µg/L", annotation_position="bottom right")
                     fig.add_hline(y=1, line_dash="dash", line_color="gray", annotation_text="餌不足 1µg/L", annotation_position="bottom right")
-                
                 elif col_name in ['sal_0m', 'sal_5m']:
                     fig.add_hline(y=33, line_dash="dash", line_color="gray", annotation_text="高塩分 33 PSU", annotation_position="bottom right")
 
@@ -669,12 +684,12 @@ try:
                     xaxis=dict(
                         title="",
                         tickmode="array",
-                        tickvals=tickvals_full,
-                        ticktext=ticktext_full, 
-                        range=["2024-01-01", "2024-12-31"],
-                        hoverformat="%-m月%-d日" 
+                        tickvals=t_vals,
+                        ticktext=t_text,
+                        range=x_range,
+                        hoverformat="%-m月%-d日"
                     ),
-                    yaxis_title=g['y_label'], 
+                    yaxis_title=g['y_label'],
                     hovermode="x unified",
                     height=350,
                     legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5),
@@ -684,7 +699,7 @@ try:
                 st.plotly_chart(fig, use_container_width=True)
                 st.divider()
 
-    # ④ 観測地点のマップを一番最後（降水量グラフの後）に描画
+    # 観測地点のマップを一番最後（降水量グラフの後）に描画
     st.markdown("📍 **観測地点：三協化成沖**")
     
     lat, lon = 34.30914828361069, 132.81821499692464
