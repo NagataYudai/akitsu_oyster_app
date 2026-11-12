@@ -301,12 +301,50 @@ try:
         prev_week_df = df_selected_year[df_selected_year['week_num'] == (input_week - 1)]
         prev_data = prev_week_df.iloc[0] if not prev_week_df.empty else pd.Series(dtype=float)
 
-        def calc_delta_str(curr_val, col_name, unit):
+        def calc_delta_info(curr_val, col_name, unit):
             prev_val = get_val(prev_data, col_name)
             if curr_val is not None and prev_val is not None:
-                diff = curr_val - prev_val
-                return f"{diff:+.2f} {unit}（先週比）"
-            return None
+                diff = round(curr_val - prev_val, 2)
+                return f"{diff:+.2f} {unit}（先週比）", diff
+            return None, None
+
+        temp_delta_str, temp_diff = calc_delta_info(input_temp, 'temp_5m', '℃')
+
+        # 💡 水温の先週比ボックスの色分け（＋ならうすい赤色、ーなら水色、変化なしならグレー）
+        if temp_diff is not None:
+            if temp_diff > 0:
+                delta_bg = "#ffe5e5"
+                delta_fg = "#d93025"
+            elif temp_diff < 0:
+                delta_bg = "#e0f4ff"
+                delta_fg = "#0077b6"
+            else:
+                delta_bg = "rgba(128, 128, 128, 0.15)"
+                delta_fg = "#555555"
+
+            st.markdown(
+                f"""
+                <style>
+                [data-testid="stMetricDelta"] {{
+                    background-color: {delta_bg} !important;
+                    color: {delta_fg} !important;
+                    padding: 2px 8px !important;
+                    border-radius: 999px !important;
+                    width: fit-content !important;
+                    display: inline-flex !important;
+                    align-items: center !important;
+                }}
+                [data-testid="stMetricDelta"] > div {{
+                    background-color: transparent !important;
+                    color: {delta_fg} !important;
+                }}
+                [data-testid="stMetricDelta"] svg {{
+                    fill: {delta_fg} !important;
+                }}
+                </style>
+                """,
+                unsafe_allow_html=True
+            )
 
         # 各項目の評価メッセージを作成
         if input_temp is not None:
@@ -349,7 +387,7 @@ try:
                 st.metric(
                     label="🌡️ 水深5m 水温",
                     value=f"{input_temp:.2f} ℃" if input_temp is not None else "未観測",
-                    delta=calc_delta_str(input_temp, 'temp_5m', '℃'),
+                    delta=temp_delta_str,
                     delta_color="off"
                 )
                 st.write(temp_eval)
