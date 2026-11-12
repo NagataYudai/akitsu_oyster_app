@@ -298,19 +298,26 @@ try:
         st.subheader("🌊 現在の海況")
         st.caption("※ 11月〜翌年5月はへい死リスクが低いため、リスクスコアの判定は休止し、最新の海況を表示しています。")
 
-        prev_week_df = df_selected_year[df_selected_year['week_num'] == (input_week - 1)]
-        prev_data = prev_week_df.iloc[0] if not prev_week_df.empty else pd.Series(dtype=float)
+        # 💡 前回の実測データを取得（現在選択している日付より前で、水温データが存在する最新の行）
+        past_data_df = df[(df['date'].dt.date < input_date) & df['temp_5m'].notnull()].sort_values('date', ascending=False)
+        if not past_data_df.empty:
+            prev_data = past_data_df.iloc[0]
+            prev_date_str = f"{prev_data['date'].month}月{prev_data['date'].day}日"
+            delta_label = f"前回（{prev_date_str}）比"
+        else:
+            prev_data = pd.Series(dtype=float)
+            delta_label = "前回比"
 
         def calc_delta_info(curr_val, col_name, unit):
             prev_val = get_val(prev_data, col_name)
             if curr_val is not None and prev_val is not None:
                 diff = round(curr_val - prev_val, 2)
-                return f"{diff:+.2f} {unit}（先週比）", diff
+                return f"{diff:+.2f} {unit}（{delta_label}）", diff
             return None, None
 
         temp_delta_str, temp_diff = calc_delta_info(input_temp, 'temp_5m', '℃')
 
-        # 💡 水温の先週比ボックスの色分け（＋ならうすい赤色、ーなら水色、変化なしならグレー）
+        # 水温の前回比ボックスの色分け（＋ならうすい赤色、ーなら水色、変化なしならグレー）
         if temp_diff is not None:
             if temp_diff > 0:
                 delta_bg = "#ffe5e5"
@@ -380,7 +387,7 @@ try:
         else:
             do_eval = "水深5mの溶存酸素は「未観測」です。"
 
-        # 4列のボックス内に数値（水温のみ先週比つき）と具体的な評価を表示
+        # 4列のボックス内に数値（水温のみ前回比つき）と具体的な評価を表示
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             with st.container(border=True):
@@ -646,7 +653,7 @@ try:
                     t_text = ticktext_summer
 
                 else:
-                    # 【冬季モード：11月〜5月（案B）】
+                    # 【冬季モード：11月〜5月】
                     for year in sorted(df['year'].unique()):
                         year_data = df[df['year'] == year]
                         if col_name in year_data.columns:
